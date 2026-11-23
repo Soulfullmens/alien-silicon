@@ -36,9 +36,14 @@ def provenance() -> dict[str, Any]:
             "sandbox": isolation()}
 
 
-def evaluate(source: str, task: Any, *, seed: int = 0, mufu_ulp_error: float = 0.0,
+def evaluate(source: str, task: Any, chip: Any = None, *, seed: int = 0, mufu_ulp_error: float = 0.0,
              mma_k_chunk: int | None = None) -> dict[str, Any]:
-    """Judge one submission (DSL source with exactly one kernel). Never raises on bad input."""
+    """Judge one submission (DSL source with exactly one kernel). Never raises on bad input.
+
+    With a `chip` (ChipSpec), the kernel must also fit the chip (stage "resources"), correctness uses the
+    chip's numerics (MUFU error, MMA accumulator rounding), and the record gains `perf`: cycles, time,
+    bottleneck, per-unit breakdown, occupancy and hotspots on task.perf_shape, plus `cheat_flags`.
+    """
     from .bounds import prove_bounds
     from .correctness import passed, run_tests
     from .sandbox import build_in_sandbox
@@ -58,7 +63,27 @@ def evaluate(source: str, task: Any, *, seed: int = 0, mufu_ulp_error: float = 0
     record["bounds"] = bounds
     if bounds["status"] == "failed":
         return {**record, "stage": "bounds", "detail": bounds["detail"]}
+    if chip is not None:
+        from aliensilicon.cost import ResourceError, resources
+
+        record["chip"] = chip.name
+        mufu_ulp_error, mma_k_chunk = chip.mufu.ulp_error, chip.mma_k_chunk()
+        try:
+            for shape in (*task.shapes, task.perf_shape):
+                resources(kernel, chip, {**shape, **task.dims(shape)})
+        except ResourceError as e:
+            return {**record, "stage": "resources", "detail": str(e)}
     tests = run_tests(task, kernel, seed=seed, mufu_ulp_error=mufu_ulp_error, mma_k_chunk=mma_k_chunk)
     record["tests"] = tests
     ok = passed(tests)
+    if ok and chip is not None:
+        from aliensilicon.cost import estimate
+
+        shape = task.perf_shape
+        perf = estimate(kernel, chip, task.make_inputs("D1", seed, shape), task.dims(shape),
+                        min_flops=task.min_flops(shape))
+        record["perf"] = perf.to_dict()
+        hard = perf.physics == "hard_violation"
+        record["cheat_flags"] = ["physics: faster than reading the inputs once"] if hard else []
+        ok = not record["cheat_flags"]
     return {**record, "stage": "done" if ok else "tests", "correct": ok}

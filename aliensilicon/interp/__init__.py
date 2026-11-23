@@ -89,8 +89,12 @@ def _concrete(shape: tuple[Any, ...], dims: dict[str, int]) -> tuple[int, ...]:
 def run_kernel(kernel: Kernel, inputs: dict[str, np.ndarray], dims: dict[str, int] | None = None, *,
                seed: int = 0, mufu_ulp_error: float = 0.0, mma_k_chunk: int | None = None,
                cta_order: int | None = None,
-               garbage_seed: int | None = None, work_budget: int = DEFAULT_WORK_BUDGET) -> dict[str, np.ndarray]:
+               garbage_seed: int | None = None, work_budget: int = DEFAULT_WORK_BUDGET,
+               observer: Any = None, ctas: list[int] | None = None) -> dict[str, np.ndarray]:
     """Run `kernel` and return every GMEM param by name.
+
+    `observer(cta, op)` is called after every executed op (the cost model counts work this way).
+    `ctas` runs only those linear CTA indices: outputs are then incomplete, use it for cost sampling only.
 
     Params missing from `inputs` start as garbage, so a kernel must write all of its outputs.
     `cta_order=None` runs CTAs in grid order; an int shuffles them with that seed. Real GPUs
@@ -109,7 +113,8 @@ def run_kernel(kernel: Kernel, inputs: dict[str, np.ndarray], dims: dict[str, in
             gmem[p["name"]] = arr.copy()
         else:
             gmem[p["name"]] = garbage(_concrete(v.shape, dims), v.dtype, rng)
-    _launch(kernel, gmem, dims, seed, gseed, 0, (mufu_ulp_error, mma_k_chunk), cta_order, _Budget(work_budget))
+    _launch(kernel, gmem, dims, seed, gseed, 0, (mufu_ulp_error, mma_k_chunk), cta_order, _Budget(work_budget),
+            observer, ctas)
     return gmem
 
 
@@ -145,12 +150,13 @@ def run_program(program: Program, inputs: dict[str, np.ndarray], dims: dict[str,
 
 
 def _launch(k: Kernel, gmem: dict[str, np.ndarray], dims: dict[str, int], seed: int, gseed: int, launch: int,
-            numerics: tuple[float, int | None], cta_order: int | None, budget: _Budget) -> None:
+            numerics: tuple[float, int | None], cta_order: int | None, budget: _Budget,
+            observer: Any = None, ctas: list[int] | None = None) -> None:
     grid = _concrete(k.grid, dims)
     pids = list(itertools.product(*(range(g) for g in grid)))
     if len(pids) > MAX_CTAS:
         raise InterpError(f"grid of {len(pids)} CTAs exceeds {MAX_CTAS}")
-    order = list(range(len(pids)))
+    order = list(range(len(pids))) if ctas is None else sorted(set(ctas) & set(range(len(pids))))
     if cta_order is not None:
         np.random.default_rng([cta_order, launch]).shuffle(order)
     # Which CTA wrote each GMEM element in this launch; keyed by array so aliased args share one map.
@@ -162,6 +168,7 @@ def _launch(k: Kernel, gmem: dict[str, np.ndarray], dims: dict[str, int], seed: 
         rngs = (np.random.default_rng([gseed, launch + 1, cta_index]),
                 np.random.default_rng([seed, launch + 1, cta_index, 1]))
         cta = _CTA(k, env, dims, pids[cta_index], grid, rngs, numerics, budget, owners, cta_index)
+        cta.observer = observer
         with np.errstate(all="ignore"):  # overflow, NaN and divide-by-zero follow IEEE / wraparound rules
             cta.block(k.body)
 
@@ -181,6 +188,8 @@ class _CTA:
         self.read: dict[int, np.ndarray] = {}
         self.pending: dict[int, dict[int, np.ndarray]] = {}  # async_copy dst -> {group: mask} until wait
         self.op_reads: dict[int, np.ndarray] = {}
+        self.observer: Any = None
+        self.last_move: tuple[int, tuple[Any, ...], int, tuple[Any, ...]] | None = None
 
     # ------------------------------------------------------------ helpers
 
@@ -240,6 +249,8 @@ class _CTA:
                 self.read[vid] = self.read[vid] | m if vid in self.read else m
             for vid in op.outputs:
                 self.budget.charge(self.env[vid].size)
+            if self.observer is not None:
+                self.observer(self, op)
 
     def touch(self, vid: int, idx: tuple[Any, ...], write: bool, group: int | None = None) -> None:
         """Check a read or write of region `idx` of a shared tile against hazards since the last barrier."""
@@ -296,6 +307,7 @@ class _CTA:
         self.touch(d_vid, d_idx, write=True, group=op.attrs["group"] if op.kind == "async_copy" else None)
         self.own(s_vid, s_idx, write=False)
         self.own(d_vid, d_idx, write=True)
+        self.last_move = (s_vid, s_idx, d_vid, d_idx)
         dst[d_idx] = data  # in place: GMEM writes are visible to later CTAs
 
     op_load = op_store = op_async_copy = _move
@@ -318,7 +330,7 @@ class _CTA:
         self.budget.charge(a.shape[0] * a.shape[1] * b.shape[1])
         a, b = a.astype(np.float64), b.astype(np.float64)
         step = self.mma_k_chunk or a.shape[1]
-        out = acc.astype(np.float64)
+        out = np.zeros(acc.shape) if op.attrs.get("clear") else acc.astype(np.float64)
         for k0 in range(0, a.shape[1], step):  # round into the accumulator dtype after each k-chunk
             out = (out + a[:, k0:k0 + step] @ b[k0:k0 + step, :]).astype(acc.dtype).astype(np.float64)
         acc[...] = out

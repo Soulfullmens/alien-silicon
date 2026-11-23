@@ -8,7 +8,7 @@ Workloads from §13. Each task in `TASKS` (`__init__.py`) has a spec, symbolic i
 |---|---|
 | W1 GEMM | baseline `gemm_naive` (64×64 tiles, K step 32) |
 | W2 row softmax | baseline `softmax_naive` (§8.4) |
-| W3 attention | baseline `attention_naive`, non-causal, d = 64; causal still to do |
+| W3 attention | baseline `attention_naive`, non-causal, d = 64; causal still to do. `examples/` has FA2-style and FA4-style kernels |
 | W4–W7 | later |
 
-`check(out, ref)` is the correctness rule. τ = 1e-3 is locked.
+`check(out, ref)` is the correctness rule. τ = 1e-3 is locked. `perf_shape` is the realistic size used to price a kernel on a chip, and `min_flops` feeds the soft compute lower bound.

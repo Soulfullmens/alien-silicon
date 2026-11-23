@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "warp_size": 32,
+  "regs_per_sm": 65536,
+  "max_regs_per_thread": 255,
+  "smem_banks": 32,
+  "smem_bank_width_bytes": 4,
+  "barrier_clk": 20,
+  "latency_hiding_warps": 16,
+  "reduce": {
+    "warp_shuffle_clk": 8,
+    "cta_reduce_clk_per_warp": 24
+  },
+  "name": "blackwell-like",
+  "family": "familiar",
+  "notes": "B200 from public specs and the FA4 paper: 148 SMs, MMA doubled to 8192 FLOPs/clk/SM, but MUFU (16/clk) and SMEM (128 B/clk) unchanged from Hopper; 256 KB TMEM; 8 TB/s HBM3e.",
+  "clock_ghz": 1.85,
+  "num_sm": 148,
+  "l2_bytes": 132120576,
+  "l2_bw_bytes_per_clk": 5940,
+  "gmem_bw_bytes_per_clk": 4324,
+  "tmem_bytes_per_sm": 262144,
+  "mma": {
+    "shapes": [
+      [
+        64,
+        8,
+        16
+      ]
+    ],
+    "in_dtypes": [
+      "f16"
+    ],
+    "acc_dtypes": [
+      "f32",
+      "f16"
+    ],
+    "ops_per_clk_per_sm": 8192,
+    "latency_clk": 32
+  },
+  "mufu": {
+    "ops": [
+      "exp2",
+      "log2",
+      "rcp",
+      "rsqrt",
+      "sin",
+      "cos"
+    ],
+    "ops_per_clk_per_sm": 16,
+    "latency_clk": 20,
+    "ulp_error": 2
+  },
+  "max_threads_per_cta": 1024,
+  "max_threads_per_sm": 2048,
+  "max_ctas_per_sm": 32,
+  "smem_per_sm_bytes": 233472,
+  "smem_per_cta_max_bytes": 232448,
+  "smem_read_bw_bytes_per_clk_per_sm": 128,
+  "smem_write_bw_bytes_per_clk_per_sm": 128,
+  "async_copy": true,
+  "max_pipeline_stages": 8,
+  "launch_overhead_clk": 5000,
+  "gmem_latency_clk": 600,
+  "fma": {
+    "f32_ops_per_clk_per_sm": 128,
+    "f16_ops_per_clk_per_sm": 256,
+    "latency_clk": 4
+  },
+  "int": {
+    "ops_per_clk_per_sm": 64,
+    "imul_ops_per_clk_per_sm": 16,
+    "latency_clk": 4
+  }
+}

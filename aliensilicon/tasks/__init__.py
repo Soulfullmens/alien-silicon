@@ -36,12 +36,14 @@ class Task:
     reference: Callable[..., dict[str, np.ndarray]]  # float64 in, float64 out
     baseline: str
     large: float  # S3 scale: as large as the task stays finite in f16 ("where safe")
+    perf_shape: dict[str, int]  # realistic size used for pricing on a chip (correctness uses `shapes`)
+    min_flops: Callable[[dict[str, int]], float]  # useful work, for the soft compute lower bound (§12)
 
     def dims(self, shape: dict[str, int] | None = None) -> dict[str, int]:
         return self.grid(shape or self.shapes[0])
 
     def __post_init__(self) -> None:
-        for s in self.shapes:
+        for s in (*self.shapes, self.perf_shape):
             assert all(s[d] > 0 for d in s) and all(self.constraints(s)), f"{self.id}: shape {s} breaks constraints"
 
     def make_inputs(self, dist: str, seed: int, shape: dict[str, int] | None = None) -> dict[str, np.ndarray]:
@@ -107,20 +109,23 @@ TASKS = {
         ({"M": 128, "N": 128, "K": 128}, {"M": 64, "N": 192, "K": 96}, {"M": 192, "N": 64, "K": 32}),
         lambda s: {"m_tiles": div(s["M"], 64), "n_tiles": div(s["N"], 64), "k_tiles": div(s["K"], 32)},
         lambda s: [s["M"] % 64 == 0, s["N"] % 64 == 0, s["K"] % 32 == 0],
-        lambda A, B: {"C": A @ B}, "gemm_naive", large=10.0),
+        lambda A, B: {"C": A @ B}, "gemm_naive", large=10.0,
+        perf_shape={"M": 2048, "N": 2048, "K": 1024}, min_flops=lambda s: 2 * s["M"] * s["N"] * s["K"]),
     "w2": Task(
         "w2", "Y = softmax(X) over each row. X, Y: (rows, cols) f16, any cols.",
         {"X": ("rows", "cols")}, {"Y": ("rows", "cols")},
         ({"rows": 8, "cols": 256}, {"rows": 3, "cols": 200}, {"rows": 2, "cols": 1000}),
         lambda s: {},
         lambda s: [],
-        lambda X: {"Y": _softmax(X)}, "softmax_naive", large=100.0),
+        lambda X: {"Y": _softmax(X)}, "softmax_naive", large=100.0,
+        perf_shape={"rows": 4096, "cols": 2048}, min_flops=lambda s: 4 * s["rows"] * s["cols"]),
     "w3": Task(
         "w3", f"O = softmax(Q K^T / sqrt({D})) V, non-causal, one head. Q, K, V, O: (seq, {D}) f16, "
-              "seq a multiple of 16. Grid symbol: q_blocks = seq/16.",
+              "seq a multiple of 128. Grid/loop symbols: q_blocks = seq/16, q_tiles = seq/128, kv_tiles = seq/64.",
         {"Q": ("seq", D), "K": ("seq", D), "V": ("seq", D)}, {"O": ("seq", D)},
-        ({"seq": 256}, {"seq": 128}, {"seq": 48}),
-        lambda s: {"q_blocks": div(s["seq"], 16)},
-        lambda s: [s["seq"] % 16 == 0],
-        lambda Q, K, V: {"O": _softmax(Q @ K.T / np.sqrt(D)) @ V}, "attention_naive", large=100.0),
+        ({"seq": 256}, {"seq": 128}, {"seq": 384}),
+        lambda s: {"q_blocks": div(s["seq"], 16), "q_tiles": div(s["seq"], 128), "kv_tiles": div(s["seq"], 64)},
+        lambda s: [s["seq"] % 128 == 0],
+        lambda Q, K, V: {"O": _softmax(Q @ K.T / np.sqrt(D)) @ V}, "attention_naive", large=100.0,
+        perf_shape={"seq": 4096}, min_flops=lambda s: 4 * s["seq"] ** 2 * D),
 }

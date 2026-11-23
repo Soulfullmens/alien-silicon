@@ -17,6 +17,7 @@ aliensilicon = "aliensilicon.cli:main"
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "hypothesis>=6", "ruff>=0.5"]
+analysis = ["matplotlib>=3.8"]
 
 [tool.setuptools.packages.find]
 include = ["aliensilicon*", "judge*"]
@@ -36,4 +37,4 @@ ignore = ["E701"]
 "**/__init__.py" = ["F401"]  # re-exports; __all__ is built from DSL_NAMES
 # Symbolic dims like ("rows", "cols") inside GMEM[...] annotations look like forward refs to ruff.
 "tests/**" = ["F821", "F841", "B018", "E741"]
-"aliensilicon/tasks/baselines/**" = ["F821", "E741"]  # Q, K, V, O, l as in the math
+"aliensilicon/tasks/{baselines,examples}/**" = ["F821", "E741"]  # Q, K, V, O, l as in the math
