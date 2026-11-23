@@ -17,13 +17,13 @@ The spec is §8 and I-5 of `master_plan.md`. This page records what the code in 
 | 1 | `alloc(space, shape, dtype, init=, pad=, swizzle=, stride=)` | `alloc` | none | `T.alloc_shared` / `T.alloc_fragment` / `T.alloc_local`; `init` → `T.clear` / `T.fill` |
 | 2 | `load(src, dst)`, `store(src, dst)` | `load`, `store` | GMEM / TMEM / SMEM | `T.copy` |
 | 3 | `async_copy(src, dst, group)`, `wait(group)` | `async_copy`, `wait` | COPY, control | `T.Pipelined(..., num_stages=k)` |
-| 4 | `mma(a, b, acc)` (acc += a @ b) | `mma` | MMA | `T.gemm` |
+| 4 | `mma(a, b, acc, transpose_b=False)` (acc += a @ b or a @ bᵀ) | `mma` | MMA | `T.gemm(..., transpose_B=)` |
 | 5 | `add sub mul fma max min neg abs` | same | FMA | expressions in `T.Parallel` |
 | 6 | `mufu(op, x)`, op ∈ exp2 log2 rcp rsqrt sin cos | `mufu` + `attrs.op` | MUFU | `T.exp2`, `T.log2`, … |
 | 7 | `iadd isub imul and_ or_ xor shl shr` | `iadd` … `and` `or` … | INT (`imul` → IMUL) | TIR integer ops |
 | 8 | `bitcast(x, dt)` (equal width), `convert(x, dt)` | same | INT, FMA | TIR reinterpret / cast |
 | 9 | `cmp(op, a, b)` → bool, `select(mask, a, b)` | same | FMA | `T.if_then_else` |
-| 10 | `reduce(op, x, axis, scope)`, op ∈ max min sum | `reduce` | REDUCE (thread scope → FMA) | `T.reduce_max` / `T.reduce_sum` |
+| 10 | `reduce(op, x, axis, scope, keepdims=False)`, op ∈ max min sum | `reduce` | REDUCE (thread scope → FMA) | `T.reduce_max` / `T.reduce_sum` |
 | 11 | `for i in serial(n, unroll=False):` | `for` | control | `T.serial` / `T.unroll` |
 | 12 | `with if_(cond):` | `if` | control | TIR `if` |
 | 13 | `barrier()` | `barrier` | control | implicit in TileLang / `T.sync_threads` |
@@ -35,11 +35,21 @@ The spec is §8 and I-5 of `master_plan.md`. This page records what the code in 
 
 ## Rules the builder enforces
 
-- Elementwise ops need one dtype across their tile operands. Number literals broadcast. Scalars `()` broadcast against tiles. Float ops reject int tiles, and int ops reject float tiles.
+- Elementwise ops need one dtype across their tile operands. Shapes follow NumPy broadcasting (a row max kept as `(rows, 1)` broadcasts over `(rows, cols)`), and symbolic dims must match exactly. Number literals take the tile's dtype. Float ops reject int tiles, and int ops reject float tiles.
 - `load` and `store` do not convert. Load into a tile of the source dtype, then `convert` it (see `softmax_naive.py`).
 - `alloc` can't create GMEM. GMEM comes from kernel params or `buffer()` in a `@program`.
 - Kernels return nothing. Outputs are written with `store`.
 - `for` bodies are traced once and kept as one rolled loop op. `unroll` is only a mark.
+
+## Interpreter semantics (`aliensilicon/interp`)
+
+- f16 and f32 ops run in their own dtype, rounded to nearest-even after every op. `fma` and `mma` compute in float64 and round once to the result dtype, so `mma` accumulates in whatever dtype the accumulator tile has.
+- New SMEM/RMEM/TMEM tiles, and GMEM outputs not passed as inputs, hold seeded random bits (NaN and Inf included). A kernel that skips writing an output, or reads memory it never set, gives different results for different seeds.
+- `mufu` is exact unless `mufu_ulp_error` is set. Then it adds seeded uniform error of up to that many ulps.
+- Integer ops wrap. `shl` and `shr` clamp the shift amount to the type width, as in PTX. Float→int `convert` truncates toward zero, saturates, and maps NaN to 0. Int→int narrowing wraps.
+- Any out-of-bounds index or slice raises `InterpError`. `gather_load` clamps its indices instead (group 15).
+- `reduce(sum)` uses NumPy pairwise order in the tile dtype. This may need to match the chip's tree order later.
+- `barrier`, `wait` and `async_copy` run immediately. Race and hazard modelling is the cost model's job.
 
 ## Not checked yet (later weeks)
 
@@ -50,4 +60,4 @@ The spec is §8 and I-5 of `master_plan.md`. This page records what the code in 
 
 ## Paper-check kernels (Week 1 done-check)
 
-`aliensilicon/tasks/baselines/`: `copy_rows`, `softmax_naive` and `gemm_naive`. All three pass the judge allow-list and build into IR JSON (`tests/test_ir.py`).
+`aliensilicon/tasks/baselines/`: `copy_rows`, `softmax_naive`, `gemm_naive` and `attention_naive`. All of them pass the judge allow-list and build into IR JSON (`tests/test_ir.py`). The last three are correct at τ on D1–D4 in the interpreter (`tests/test_interp.py`).

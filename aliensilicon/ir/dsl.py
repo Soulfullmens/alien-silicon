@@ -5,6 +5,7 @@ Primitive names are generic on purpose (rule 8.1.1): no trick is built in.
 """
 from __future__ import annotations
 
+import builtins
 import inspect
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -193,19 +194,32 @@ def wait(group: int = 0) -> None:
 
 # ---------------------------------------------------------------- 4 mma
 
-def mma(a: Tile, b: Tile, acc: Tile) -> Tile:
-    """acc += a @ b, written in place."""
+def mma(a: Tile, b: Tile, acc: Tile, transpose_b: bool = False) -> Tile:
+    """acc += a @ b (or a @ b.T), written in place. Matches T.gemm(transpose_B=...)."""
     for t in (a, b, acc):
         if not isinstance(t, Tile) or len(t.value.shape) != 2:
             raise DSLError("mma operands must be 2-D tiles")
-    (m, k), (k2, n), (m2, n2) = a.value.shape, b.value.shape, acc.value.shape
+    (m, k), (m2, n2) = a.value.shape, acc.value.shape
+    n, k2 = b.value.shape if transpose_b else b.value.shape[::-1]
     if k != k2 or m != m2 or n != n2:
-        raise DSLError(f"mma shape mismatch {a.value.shape} @ {b.value.shape} -> {acc.value.shape}")
-    _b().emit("mma", [a.ref, b.ref, acc.ref], [acc], "MMA")
+        raise DSLError(f"mma shape mismatch {a.value.shape} @ {b.value.shape}"
+                       f"{'.T' if transpose_b else ''} -> {acc.value.shape}")
+    _b().emit("mma", [a.ref, b.ref, acc.ref], [acc], "MMA", {"transpose_b": transpose_b})
     return acc
 
 
 # ---------------------------------------------------------------- 5,7,9 elementwise
+
+def broadcast_shape(kind: str, shapes: list[tuple[Dim, ...]]) -> tuple[Dim, ...]:
+    """NumPy broadcasting; symbolic dims must match exactly (or meet a 1)."""
+    out: list[Dim] = []
+    for i in range(1, builtins.max((len(s) for s in shapes), default=0) + 1):
+        dims = {s[-i] for s in shapes if len(s) >= i} - {1}
+        if len(dims) > 1:
+            raise DSLError(f"{kind}: shapes {[tuple(s) for s in shapes]} do not broadcast")
+        out.append(dims.pop() if dims else 1)
+    return tuple(reversed(out))
+
 
 def _elementwise(kind: str, unit: str, allowed: tuple[str, ...], *xs: Any, out_dtype: str | None = None) -> Tile:
     tiles = [x for x in xs if isinstance(x, Tile)]
@@ -217,10 +231,7 @@ def _elementwise(kind: str, unit: str, allowed: tuple[str, ...], *xs: Any, out_d
     dtype = dtypes.pop()
     if dtype not in allowed:
         raise DSLError(f"{kind}: dtype {dtype} not allowed (needs one of {allowed})")
-    shapes = {t.value.shape for t in tiles if t.value.shape != ()}
-    if len(shapes) > 1:
-        raise DSLError(f"{kind}: shape mismatch {sorted(map(str, shapes))}")
-    out = _b().new(out_dtype or dtype, shapes.pop() if shapes else (), "RMEM")
+    out = _b().new(out_dtype or dtype, broadcast_shape(kind, [t.value.shape for t in tiles]), "RMEM")
     _b().emit(kind, [_operand(x) for x in xs], [out], unit)
     return out
 
@@ -256,8 +267,7 @@ def select(mask: Tile, a: Any, b: Any) -> Tile:
     if not isinstance(mask, Tile) or mask.value.dtype != "bool":
         raise DSLError("select mask must be a bool tile from cmp()")
     out = _elementwise("select", "FMA", _FLOAT + _INT, a, b)
-    if mask.value.shape not in ((), out.value.shape):
-        raise DSLError("select mask shape must match operands")
+    out.value.shape = broadcast_shape("select", [mask.value.shape, out.value.shape])
     _b().blocks[-1].ops[-1].inputs.insert(0, mask.ref)
     return out
 
@@ -292,7 +302,7 @@ def bitcast(x: Tile, dtype: str) -> Tile:
 
 # ---------------------------------------------------------------- 10 reductions
 
-def reduce(op: str, x: Tile, axis: int, scope: str = "cta") -> Tile:
+def reduce(op: str, x: Tile, axis: int, scope: str = "cta", keepdims: bool = False) -> Tile:
     if op not in REDUCE_OPS:
         raise DSLError(f"reduce op must be one of {REDUCE_OPS}")
     if scope not in REDUCE_SCOPES:
@@ -300,9 +310,10 @@ def reduce(op: str, x: Tile, axis: int, scope: str = "cta") -> Tile:
     shape = x.value.shape
     if not 0 <= axis < len(shape):
         raise DSLError(f"reduce axis {axis} out of range for shape {shape}")
-    out = _b().new(x.value.dtype, shape[:axis] + shape[axis + 1:], "RMEM")
+    out_shape = shape[:axis] + ((1,) if keepdims else ()) + shape[axis + 1:]
+    out = _b().new(x.value.dtype, out_shape, "RMEM")
     _b().emit("reduce", [x.ref], [out], "FMA" if scope == "thread" else "REDUCE",
-              {"op": op, "axis": axis, "scope": scope})
+              {"op": op, "axis": axis, "scope": scope, "keepdims": keepdims})
     return out
 
 

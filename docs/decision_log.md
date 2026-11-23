@@ -2,6 +2,14 @@
 
 Newest first. One entry per decision that changes the spec or that a reviewer might ask about.
 
+## 2026-11-23 · Week 2 interpreter
+
+1. **Correctness rule (needs your sign-off before the pre-registration is frozen):** pass iff every output is finite and |out − ref| ≤ τ·(|ref| + max|ref|), with τ = 1e-3. A fixed absolute term of τ let a softmax that was 1% wrong, or even all zeros, pass, because softmax values are about 1/cols ≈ 0.004. The rule above scales with the output and fails both cases (`tests/test_interp.py::test_reference_catches_a_wrong_kernel`).
+2. **`mma(..., transpose_b=True)`.** Attention needs Q·Kᵀ, and the IR has no transpose. This maps 1-to-1 to `T.gemm(transpose_B=True)`.
+3. **NumPy broadcasting for elementwise ops, plus `reduce(..., keepdims=True)`.** A row max of shape `(rows, 1)` can then be subtracted from a `(rows, cols)` tile. Symbolic dims must match exactly.
+4. **Numeric semantics follow PTX where CUDA defines them:** float→int conversion saturates, and shift amounts clamp to the type width. See `docs/ir_reference.md`.
+5. **W3 baseline is non-causal with head dim 64.** Causal needs per-element row/column indices, and the IR has no iota primitive yet. That gets decided when causal W3 is built.
+
 ## 2026-11-23 · Week 0/1 setup
 
 1. **Repo layout follows I-15.4 exactly.** Track B folders (`aliensilicon/studio/`, `backends/tilelang/`) exist only as READMEs because Guardrail 1 blocks that work until Gate 2.

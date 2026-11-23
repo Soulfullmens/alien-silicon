@@ -22,7 +22,7 @@ As defined in §24 of the master plan, unchanged. Primary metrics: `frac_opt`, `
 
 ## 3. Correctness rule
 
-A kernel is `correct` only if it passes the static checks, all D tests, all S tests and the white-box adversarial tests (§14.1). Tolerance **τ = 1e-3**, relative plus absolute, defined per task. TODO: the exact per-task formula.
+A kernel is `correct` only if it passes the static checks, all D tests, all S tests and the white-box adversarial tests (§14.1). An output passes a test iff every element is finite and |out − ref| ≤ τ·(|ref| + max|ref|), with **τ = 1e-3**, where ref is the NumPy float64 reference run on the same f16 inputs (`aliensilicon/tasks/__init__.py::check`). Draft: confirm before freezing.
 
 ## 4. Chip generator
 

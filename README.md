@@ -6,7 +6,7 @@ The full plan is in [`docs/master_plan.md`](docs/master_plan.md) (v2.3).
 
 ## Status
 
-**Week 1 of Phase 1 (Shared Core).** Guardrail 1 applies: no AMD and no agent work until Gates 1 and 2 pass.
+**Week 2 of Phase 1 (Shared Core).** Guardrail 1 applies: no AMD and no agent work until Gates 1 and 2 pass.
 
 | Done | Where |
 |---|---|
@@ -14,6 +14,8 @@ The full plan is in [`docs/master_plan.md`](docs/master_plan.md) (v2.3).
 | AST allow-list for agent source (judge step 1) | `judge/static_check.py` |
 | Paper-check kernels: row copy, naive softmax (§8.4), naive GEMM | `aliensilicon/tasks/baselines/` |
 | IR reference with the TileLang mapping | `docs/ir_reference.md` |
+| NumPy interpreter: exact f16/f32 rounding, seeded garbage memory and MUFU error, deterministic | `aliensilicon/interp/` |
+| W1 GEMM, W2 softmax, W3 attention: spec, float64 reference, naive baseline, correct at τ on D1–D4 | `aliensilicon/tasks/` |
 
 ## Which folder belongs to which track
 
