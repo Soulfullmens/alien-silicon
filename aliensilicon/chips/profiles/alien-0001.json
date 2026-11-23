@@ -1,0 +1,70 @@
+{
+  "schema_version": 1,
+  "warp_size": 32,
+  "regs_per_sm": 32768,
+  "max_regs_per_thread": 128,
+  "smem_banks": 23,
+  "smem_bank_width_bytes": 4,
+  "barrier_clk": 60,
+  "latency_hiding_warps": 8,
+  "reduce": {
+    "warp_shuffle_clk": 8,
+    "cta_reduce_clk_per_warp": 200
+  },
+  "name": "alien-0001",
+  "family": "alien",
+  "notes": "Hand-made truly alien chip: 23 shared-memory banks, SMEM writes ~6x slower than reads, no exp2/log2/sin/cos unit (only rcp/rsqrt), odd 24x8x16 MMA tile, imul 16x slower than shifts, expensive cross-warp reduce, no async copy, small register file.",
+  "clock_ghz": 1.2,
+  "num_sm": 64,
+  "max_threads_per_cta": 1024,
+  "max_threads_per_sm": 1024,
+  "max_ctas_per_sm": 8,
+  "smem_per_sm_bytes": 98304,
+  "smem_per_cta_max_bytes": 98304,
+  "smem_read_bw_bytes_per_clk_per_sm": 92,
+  "smem_write_bw_bytes_per_clk_per_sm": 16,
+  "l2_bytes": 8388608,
+  "l2_bw_bytes_per_clk": 512,
+  "gmem_bw_bytes_per_clk": 1500,
+  "gmem_latency_clk": 800,
+  "tmem_bytes_per_sm": 0,
+  "async_copy": false,
+  "max_pipeline_stages": 1,
+  "launch_overhead_clk": 6000,
+  "mma": {
+    "shapes": [
+      [
+        24,
+        8,
+        16
+      ]
+    ],
+    "in_dtypes": [
+      "f16"
+    ],
+    "acc_dtypes": [
+      "f32"
+    ],
+    "ops_per_clk_per_sm": 4096,
+    "latency_clk": 48
+  },
+  "fma": {
+    "f32_ops_per_clk_per_sm": 128,
+    "f16_ops_per_clk_per_sm": 256,
+    "latency_clk": 4
+  },
+  "mufu": {
+    "ops": [
+      "rcp",
+      "rsqrt"
+    ],
+    "ops_per_clk_per_sm": 8,
+    "latency_clk": 40,
+    "ulp_error": 4
+  },
+  "int": {
+    "ops_per_clk_per_sm": 128,
+    "imul_ops_per_clk_per_sm": 8,
+    "latency_clk": 4
+  }
+}

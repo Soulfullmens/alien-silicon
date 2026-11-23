@@ -211,8 +211,11 @@ def wait(group: int = 0) -> None:
 
 # ---------------------------------------------------------------- 4 mma
 
-def mma(a: Tile, b: Tile, acc: Tile, transpose_b: bool = False) -> Tile:
-    """acc += a @ b (or a @ b.T), written in place. Matches T.gemm(transpose_B=...)."""
+def mma(a: Tile, b: Tile, acc: Tile, transpose_b: bool = False, clear: bool = False) -> Tile:
+    """acc += a @ b (or a @ b.T), written in place; clear=True overwrites acc instead.
+
+    Matches T.gemm(A, B, C, transpose_B=..., clear_accum=...).
+    """
     for t in (a, b, acc):
         if not isinstance(t, Tile) or len(t.value.shape) != 2:
             raise DSLError("mma operands must be 2-D tiles")
@@ -221,7 +224,10 @@ def mma(a: Tile, b: Tile, acc: Tile, transpose_b: bool = False) -> Tile:
     if k != k2 or m != m2 or n != n2:
         raise DSLError(f"mma shape mismatch {a.value.shape} @ {b.value.shape}"
                        f"{'.T' if transpose_b else ''} -> {acc.value.shape}")
-    _b().emit("mma", [a.ref, b.ref, acc.ref], [acc], "MMA", {"transpose_b": transpose_b})
+    attrs: dict[str, Any] = {"transpose_b": transpose_b}
+    if clear:
+        attrs["clear"] = True
+    _b().emit("mma", [a.ref, b.ref, acc.ref], [acc], "MMA", attrs)
     return acc
 
 

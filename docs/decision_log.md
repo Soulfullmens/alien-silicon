@@ -2,6 +2,22 @@
 
 Newest first. One entry per decision that changes the spec or that a reviewer might ask about.
 
+## 2026-11-23 · Week 3: chips, cost model v1, Gate 1
+
+1. **Chip spec is a frozen dataclass with explicit [min, max] BOUNDS** per numeric field, plus consistency rules. The validator, the alien generator and future co-design search all share it. No new dependency; jsonschema isn't needed.
+2. **Profiles:** `t4` (what we can measure on Kaggle), `hopper-like` and `blackwell-like` (public specs and the FA4 paper's per-SM rates), `balanced` (the Gate 1 control: MUFU and SMEM 2×), and `alien-0001` (hand-made: 23 banks, no exp unit, 24×8×16 MMA, slow SMEM writes). Uncalibrated until Gate 2.
+3. **The cost model counts work by running the interpreter with an observer**, so loop trips and branches are exact. It samples 8 evenly spaced CTAs and scales up; this assumes CTAs do similar work (true for W1–W3).
+4. **Pricing rules:**
+   - `bitcast` is free (register reinterpret).
+   - Ops issue whole warps; uniform scalars cost every thread.
+   - Reductions cost by the actual row-major thread mapping (§8.2b), not the declared scope.
+   - MMA tiles that aren't multiples of a native shape, or use unsupported dtypes, fall back to FMA speed with a flag, like a real tensor-core miss.
+   - Missing units (an exp unit, async copy, TMEM) and SMEM/thread overflows reject the kernel at a new "resources" stage.
+5. **`mma(..., clear=True)`** overwrites the accumulator. It maps to `T.gemm(clear_accum=True)` and the tensor core's non-accumulate mode. Without it, attention pays a zero-fill per block that real kernels don't.
+6. **W3 shapes are now multiples of 128** (128/256/384), with grid symbols `q_tiles` and `kv_tiles`, so FlashAttention-style 128-row kernels are possible.
+7. **Each task has a `perf_shape` for pricing** (GEMM 2048×2048×1024, softmax 4096×2048, attention seq 4096), separate from the small correctness shapes.
+8. **Gate 1 is checked in simulation (`analysis/time_machine.py`, a regression test):** FA4-style is 1.13× on blackwell-like, 0.98× on hopper-like and 0.81× on balanced. Passing Gate 1 on cost model v1 is necessary, not sufficient. Gate 2 (T4 ρ ≥ 0.8) decides whether the model can be trusted.
+
 ## 2026-11-23 · Hardening round 2 (see `red_team.md` §2)
 
 1. **Agent source is built only in the sandbox** (`judge/sandbox.py`). The judge process never executes it.

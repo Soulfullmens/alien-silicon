@@ -17,7 +17,7 @@ The spec is §8 and I-5 of `master_plan.md`. This page records what the code in 
 | 1 | `alloc(space, shape, dtype, init=, pad=, swizzle=, stride=)` | `alloc` | none | `T.alloc_shared` / `T.alloc_fragment` / `T.alloc_local`; `init` → `T.clear` / `T.fill` |
 | 2 | `load(src, dst)`, `store(src, dst)` | `load`, `store` | GMEM / TMEM / SMEM | `T.copy` |
 | 3 | `async_copy(src, dst, group)`, `wait(group)` | `async_copy`, `wait` | COPY, control | `T.Pipelined(..., num_stages=k)` |
-| 4 | `mma(a, b, acc, transpose_b=False)` (acc += a @ b or a @ bᵀ) | `mma` | MMA | `T.gemm(..., transpose_B=)` |
+| 4 | `mma(a, b, acc, transpose_b=False, clear=False)` (acc += a @ b or a @ bᵀ; clear overwrites) | `mma` | MMA | `T.gemm(..., transpose_B=, clear_accum=)` |
 | 5 | `add sub mul fma max min neg abs` | same | FMA | expressions in `T.Parallel` |
 | 6 | `mufu(op, x)`, op ∈ exp2 log2 rcp rsqrt sin cos | `mufu` + `attrs.op` | MUFU | `T.exp2`, `T.log2`, … |
 | 7 | `iadd isub imul and_ or_ xor shl shr` | `iadd` … `and` `or` … | INT (`imul` → IMUL) | TIR integer ops |

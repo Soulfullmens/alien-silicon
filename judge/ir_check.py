@@ -123,7 +123,7 @@ def _walk(k: Kernel, block: Block, env: dict[int, Any]) -> None:
         elif kind == "barrier":
             ir.barrier()
         elif kind == "mma":
-            ir.mma(*ins, transpose_b=a["transpose_b"])
+            ir.mma(*ins, transpose_b=a["transpose_b"], clear=a.get("clear", False))
         elif kind in _ELEMENTWISE:
             env[out] = _ELEMENTWISE[kind](*ins)
         elif kind == "cmp":

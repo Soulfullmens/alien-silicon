@@ -1,0 +1,75 @@
+{
+  "schema_version": 1,
+  "warp_size": 32,
+  "regs_per_sm": 65536,
+  "max_regs_per_thread": 255,
+  "smem_banks": 32,
+  "smem_bank_width_bytes": 4,
+  "barrier_clk": 20,
+  "latency_hiding_warps": 16,
+  "reduce": {
+    "warp_shuffle_clk": 8,
+    "cta_reduce_clk_per_warp": 24
+  },
+  "name": "t4",
+  "family": "familiar",
+  "notes": "NVIDIA T4 (Turing) from public specs: 40 SMs, 1.59 GHz, 65 TFLOPS f16 tensor, 320 GB/s. Uncalibrated guess; replaced by t4-cal after Kaggle microbenchmarks.",
+  "clock_ghz": 1.59,
+  "num_sm": 40,
+  "max_threads_per_cta": 1024,
+  "max_threads_per_sm": 1024,
+  "max_ctas_per_sm": 16,
+  "smem_per_sm_bytes": 65536,
+  "smem_per_cta_max_bytes": 49152,
+  "smem_read_bw_bytes_per_clk_per_sm": 128,
+  "smem_write_bw_bytes_per_clk_per_sm": 128,
+  "l2_bytes": 4194304,
+  "l2_bw_bytes_per_clk": 1024,
+  "gmem_bw_bytes_per_clk": 201,
+  "gmem_latency_clk": 450,
+  "tmem_bytes_per_sm": 0,
+  "async_copy": false,
+  "max_pipeline_stages": 1,
+  "launch_overhead_clk": 7500,
+  "mma": {
+    "shapes": [
+      [
+        16,
+        8,
+        8
+      ]
+    ],
+    "in_dtypes": [
+      "f16"
+    ],
+    "acc_dtypes": [
+      "f32",
+      "f16"
+    ],
+    "ops_per_clk_per_sm": 1024,
+    "latency_clk": 32
+  },
+  "fma": {
+    "f32_ops_per_clk_per_sm": 64,
+    "f16_ops_per_clk_per_sm": 128,
+    "latency_clk": 4
+  },
+  "mufu": {
+    "ops": [
+      "exp2",
+      "log2",
+      "rcp",
+      "rsqrt",
+      "sin",
+      "cos"
+    ],
+    "ops_per_clk_per_sm": 16,
+    "latency_clk": 20,
+    "ulp_error": 2
+  },
+  "int": {
+    "ops_per_clk_per_sm": 64,
+    "imul_ops_per_clk_per_sm": 16,
+    "latency_clk": 4
+  }
+}

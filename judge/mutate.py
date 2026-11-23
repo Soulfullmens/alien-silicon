@@ -82,7 +82,7 @@ def _swap_args(node: Any, parent: Any) -> str | None:
 
 
 def _drop_keyword(node: Any, parent: Any) -> str | None:
-    if not (isinstance(node, ast.keyword) and node.arg in ("init", "transpose_b", "keepdims")):
+    if not (isinstance(node, ast.keyword) and node.arg in ("init", "transpose_b", "keepdims", "clear")):
         return None
     parent.keywords.remove(node)
     return f"{node.arg}="
