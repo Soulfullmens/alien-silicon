@@ -139,7 +139,14 @@ def _refresh(app, entry):
     return _store(app, tok, old=entry)
 
 
+TOKEN_APPS = ["telegram", "discord", "slack", "github", "notion"]
+
+
 def get_token(app):
+    if app in TOKEN_APPS:
+        if not os.environ.get(f"{app.upper()}_TOKEN"):
+            raise RuntimeError(f"{app} is not connected. Set {app.upper()}_TOKEN (see README).")
+        return os.environ[f"{app.upper()}_TOKEN"]
     entry = _load().get(app)
     if not entry:
         raise RuntimeError(f"{app} is not connected. Run: python -m hub connect {app}")
@@ -149,4 +156,4 @@ def get_token(app):
 
 
 def connected():
-    return sorted(_load())
+    return sorted([*_load(), *(a for a in TOKEN_APPS if os.environ.get(f"{a.upper()}_TOKEN"))])

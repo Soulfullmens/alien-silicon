@@ -33,7 +33,7 @@ auth.httpx.post = fake_post
 
 # auth URL carries the right client id param and scopes
 q = dict(urllib.parse.parse_qsl(urllib.parse.urlparse(auth.auth_url("tiktok", "s1")).query))
-assert q["client_key"] == "tk" and q["scope"] == "user.info.basic,video.list" and q["state"] == "s1"
+assert q["client_key"] == "tk" and q["scope"] == "user.info.basic,video.list,video.publish" and q["state"] == "s1"
 q = dict(urllib.parse.parse_qsl(urllib.parse.urlparse(auth.auth_url("google", "s2")).query))
 assert q["access_type"] == "offline" and "gmail.send" in q["scope"]
 
@@ -70,5 +70,49 @@ def fake_request(method, url, headers=None, **kw):
 server.httpx.request = fake_request
 assert server.drive_search("a'b") == [{"id": "1", "name": "a'b"}]
 assert seen["auth"] == "Bearer new" and seen["params"]["q"] == "name contains 'a\\'b' and trashed = false"
+
+# Instagram: waits for container processing, then publishes; ERROR status surfaces clearly
+auth._save({**auth._load(), "instagram": {"access_token": "ig"}})
+server.POLL_SECONDS = 0
+script = []
+
+
+def ig_request(method, url, headers=None, **kw):
+    script.append((method, url.rsplit("/", 1)[-1], kw.get("params")))
+    if url.endswith("/me/media"):
+        return R({"id": "c1"})
+    if url.endswith("/c1"):
+        return R({"status_code": statuses.pop(0)})
+    return R({"id": "post1"})
+
+
+server.httpx.request = ig_request
+statuses = ["IN_PROGRESS", "FINISHED"]
+assert server.instagram_post_reel("https://x/v.mp4", "hi") == {"id": "post1"}
+assert script[0][2]["media_type"] == "REELS" and script[-1][1] == "media_publish"
+statuses = ["ERROR"]
+try:
+    server.instagram_post_story(image_url="https://x/a.jpg")
+    raise AssertionError("expected error")
+except server.ToolError as e:
+    assert "ERROR" in str(e)
+for bad in (lambda: server.instagram_post_story(), lambda: server.instagram_post_carousel(["one"])):
+    try:
+        bad()
+        raise AssertionError("expected validation error")
+    except server.ToolError:
+        pass
+
+# token apps: env var = connected; Discord uses "Bot" auth; Slack ok:false becomes an error
+os.environ.update(DISCORD_TOKEN="dt", SLACK_TOKEN="st")
+assert {"discord", "slack"} <= set(server.list_connections())
+server.httpx.request = lambda m, u, headers=None, **kw: (seen.update(auth=headers["Authorization"]), R({"id": "9"}))[1]
+assert server.discord_send("123", "hi") == {"id": "9"} and seen["auth"] == "Bot dt"
+server.httpx.request = lambda m, u, headers=None, **kw: R({"ok": False, "error": "not_in_channel"})
+try:
+    server.slack_send("C1", "hi")
+    raise AssertionError("expected error")
+except server.ToolError as e:
+    assert "not_in_channel" in str(e)
 
 print(f"ok: {len(names)} tools")

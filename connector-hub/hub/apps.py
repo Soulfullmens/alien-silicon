@@ -1,4 +1,6 @@
-"""OAuth settings per provider. Add an app = add one entry here + its tools in server.py."""
+"""OAuth settings per provider. Add an app = add one entry here + its tools in server.py.
+
+Token-only apps (telegram, discord, slack, github, notion) need no entry: set <APP>_TOKEN instead."""
 
 APPS = {
     # One Google OAuth client covers Gmail, YouTube, Calendar and Drive.
@@ -21,7 +23,12 @@ APPS = {
     "instagram": {
         "auth_url": "https://www.instagram.com/oauth/authorize",
         "token_url": "https://api.instagram.com/oauth/access_token",
-        "scopes": ["instagram_business_basic", "instagram_business_content_publish"],
+        "scopes": [
+            "instagram_business_basic",
+            "instagram_business_content_publish",
+            "instagram_business_manage_comments",
+            "instagram_business_manage_insights",
+        ],
         "scope_sep": ",",
         "client_id_param": "client_id",
         "extra_auth": {},
@@ -29,7 +36,7 @@ APPS = {
     "tiktok": {
         "auth_url": "https://www.tiktok.com/v2/auth/authorize/",
         "token_url": "https://open.tiktokapis.com/v2/oauth/token/",
-        "scopes": ["user.info.basic", "video.list"],
+        "scopes": ["user.info.basic", "video.list", "video.publish"],
         "scope_sep": ",",
         "client_id_param": "client_key",  # TikTok calls the client id "client_key"
         "extra_auth": {},
