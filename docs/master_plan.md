@@ -1,21 +1,18 @@
 # ALIEN SILICON — Master Plan v2.3
 
-**Track A: Science (the proof) + Track B: Product (the business) — one engine**
+**Track A: Science (the proof) + Track B: Product — one engine**
 
 **Plan version:** v2.3 · 23 Nov 2026
-**Timeline:** Week 0 = 23–29 Nov 2026 → Week 30 ends 27 Jun 2027 (Weeks 31–32 = buffer)
-**Pace:** 25–30 hours/week, based in Hyderabad. Slide weeks during university exams; never skip a gate.
+**Public edition:** the personal schedule, time and money budgets, people, learning plan and business sections are not included.
 
-**What changed in v2.3:** citations verified on arXiv (two wrong titles fixed, seven [verify] entries completed); closest-work reading added to Weeks 0–1; superseded §27 and §29 bodies replaced with pointers.
-
-**What changed in v2.2:** owner section removed; Hyderabad-only 30-week timeline; four Part II fixes (WMMA 16×16×16 in the T4 schema, split physics bounds, two new metrics, footer); new sections on what we need (I-13), how it works end to end (I-14), full architecture (I-15), how users use each product (I-16), and the citation list for the paper (I-17).
+**What changed in v2.3:** citations verified on arXiv (two wrong titles fixed, seven [verify] entries completed); closest-work reading added to Weeks 0–1; superseded §27 body replaced with a pointer.
 
 ---
 
 ## How this file is organized
 
-- **PART I — The plan** (read first): what we create, the goal, the two tracks, guardrails, TileLang mapping, week-by-week timeline, Track B product and startup steps, budget, what we need, how it works, architecture, user guides, references.
-- **PART II — Technical specification** (from v1.1, patched): research questions, background, glossary, all 15 components, experiments, metrics, statistics, pre-registration, repo layout, tech stack, money, risks, safety, paper outline, learning resources, routine, checklists.
+- **PART I — The plan** (read first): what we create, the goal, the two tracks, guardrails, TileLang mapping, phases, gates, what we need, how it works, architecture, user guides, references.
+- **PART II — Technical specification** (from v1.1, patched): research questions, background, glossary, all 15 components, experiments, metrics, statistics, pre-registration, repo layout, tech stack, risks, safety, paper outline, checklists.
 - If Part I and Part II disagree, **Part I wins**.
 
 ---
@@ -30,7 +27,7 @@
 
 **Two tracks, one engine:**
 - **Track A — Science (the proof):** show on never-seen simulated chips that the AI truly *invents* and does not just *recall*. Output: a paper + a public benchmark.
-- **Track B — Product (the business):** use the same engine on a **real non-NVIDIA chip (AMD, via TileLang)** and as a **pre-silicon co-design tool** for chip teams. Output: open-source tool + real demo + first users.
+- **Track B — Product:** use the same engine on a **real non-NVIDIA chip (AMD, via TileLang)** and as a **pre-silicon co-design tool** for chip teams. Output: open-source tool + real demo + first users.
 
 **Track A makes people trust Track B. Track B makes Track A matter in the real world.**
 
@@ -44,7 +41,7 @@
 | C2 | **Alien Silicon Benchmark** | A | 40+ made-up chips + tasks + hidden judge + known best answer per chip + leaderboard | AI labs and researchers testing if their AI can invent |
 | C3 | **The Paper** | A | "AI invents fast code on hardware nobody has ever programmed" + time-machine test + self-improvement test | Research world; credibility for C4/C5 |
 | C4 | **Alien Silicon Studio** (co-design tool) | B | Give it 10–20 chip design options + AI models. It writes and verifies kernels for each design and reports which design is best and why | AI-chip startups, RISC-V accelerator teams, hardware labs, chip architects |
-| C5 | **AMD demo** (TileLang → AMD GPU) | B | Engine-found kernels running on a **real AMD GPU**, compared with existing libraries/compilers | Investors and chip companies: proof on real non-NVIDIA silicon |
+| C5 | **AMD demo** (TileLang → AMD GPU) | B | Engine-found kernels running on a **real AMD GPU**, compared with existing libraries/compilers | Chip companies and partners: proof on real non-NVIDIA silicon |
 | C6 | Fast T4 kernels (side) | A | Verified attention/GEMM for free Kaggle/Colab GPUs | Students, small startups |
 | C7 | GPU Playground notebooks (side) | Shared | Tutorials that teach GPU concepts with the simulator on any laptop | Students, teachers |
 
@@ -60,15 +57,13 @@
 | Engine real | Simulator matches real T4 (ρ ≥ 0.8) and AMD (ρ ≥ 0.7) |
 | Product real | Studio open-sourced with docs; used on ≥ 1 real chip design (open-source design or design partner) |
 | Real silicon demo | On AMD, engine kernels match or beat the TileLang/library baseline on ≥ 2 operators |
-| Market tested | ≥ 15 conversations with chip/hardware people; ≥ 3 say "we would try this"; startup go/no-go decided with evidence |
-| Skills | GPU architecture, CUDA, TileLang, compilers — the AI Systems & GPU Kernel Engineer path |
 
 ---
 
 ## I-4. Two guardrails
 
 **Guardrail 1 — Weeks 1–12: Shared Core ONLY.**
-No AMD, no ROCm, no multi-chip experiments, no startup outreach until: Tile IR + interpreter + twin are done **and** Gate 1 (FA4-trick fidelity) passes **and** Gate 2 (T4 sim-to-real **ρ ≥ 0.8**) passes.
+No AMD, no ROCm, no multi-chip experiments, no outreach until: Tile IR + interpreter + twin are done **and** Gate 1 (FA4-trick fidelity) passes **and** Gate 2 (T4 sim-to-real **ρ ≥ 0.8**) passes.
 
 **Guardrail 2 — Tile IR is TileLang-compatible from Week 1.**
 Every primitive maps 1-to-1 onto a TileLang concept (I-5). Track A runs on our simulator; Track B lowers the same kernels through TileLang to AMD — no engine rewrite.
@@ -106,150 +101,15 @@ Our IR keeps generic, trick-free names (so the time-machine test stays clean), b
 ## I-6. Phases at a glance
 
 ```
-Phase 0  Week 0          Setup · guide meeting · pre-registration draft
+Phase 0  Week 0          Setup · pre-registration draft
 Phase 1  Weeks 1–12      SHARED CORE: IR · interpreter · twin · T4 calibration      [G1, G2]
 Phase 2  Weeks 13–17     SHARED ENGINE: judge · hacker-fixer · alien chips ·
                          ground truth · agent loop · pilot                          [G3, G4]
 Phase 3  Weeks 18–26     SPLIT  Track A: experiments E1–E6 → paper draft
-                                Track B: TileLang→AMD · Studio · customer talks     [B1, B2]
-Phase 4  Weeks 27–30     LAUNCH: arXiv · open source · demo · design partners ·
-                         startup go/no-go                                           [S]
-Buffer   Weeks 31–32     exams / gate slips
+                                Track B: TileLang→AMD · Studio                    [B1, B2]
+Phase 4  Weeks 27–30     LAUNCH: arXiv · open source · demo · design partners
+Buffer   Weeks 31–32     gate slips
 ```
-
----
-
-## I-7. Time budget
-
-| Period | Hours/week | Note |
-|---|---|---|
-| Weeks 0–30 | 25–30 | Steady pace alongside M.Tech. Slide weeks during exams; never skip a gate. |
-
----
-
-## I-8. Week-by-week plan
-
-> Week 1 starts Monday 30 Nov 2026. Section numbers (§) refer to Part II.
-
-### PHASE 0
-
-**Week 0 — 23–29 Nov · Setup**
-- **Tasks:** private GitHub repo `alien-silicon` (structure in I-15.4); this file → `docs/master_plan.md`; start `docs/decision_log.md`; Python env + `pytest` + `ruff`; Kaggle account + T4 test (`nvidia-smi`); draft `docs/preregistration_v1.md` (§26); meet/email your M.Tech guide with I-1 to confirm this as the thesis/project.
-- **Learn:** PMPP ch. 1–2. **Read closest work:** Redko et al. 2026 (*Prior Knowledge or Search?*, ref 31) — write a half-page "how we differ" note for the pre-registration (I-18).
-- **Done-check:** repo + pre-reg draft (with "how we differ" note) + Kaggle T4 works + guide contacted.
-
-### PHASE 1 — SHARED CORE (Guardrail 1 active)
-
-**Week 1 — 30 Nov–6 Dec · Tile IR spec (TileLang-aligned)**
-- **Tasks:** `docs/ir_reference.md` (§8 incl. 8.2b threading rules + I-5); code `aliensilicon/ir/` (Value, Op, Block, Kernel, `@kernel`, `@program`, JSON + SHA-256); AST allow-list; paper-check mapping with 3 kernels.
-- **Using:** Python dataclasses, `ast`, `hashlib`, TileLang docs (read only).
-- **Learn:** PMPP ch. 3; fp16/fp32 rounding; TileLang README + examples. **Read:** Chun 2026 (ref 26), add to the "how we differ" note.
-- **Done-check:** softmax example builds into IR JSON; every primitive mapped.
-
-**Week 2 — 7–13 Dec · Interpreter**
-- **Tasks:** NumPy interpreter (§9): dtype emulation, grid loop, CTA lanes, MUFU error injection, garbage-filled buffers, clamped `gather_load`; references + naive baselines for W1 GEMM, W2 softmax, W3 attention.
-- **Using:** NumPy, pytest, `hypothesis`. **Learn:** PMPP ch. 4.
-- **Done-check:** three baselines correct at τ = 1e-3; deterministic.
-
-**Week 3 — 14–20 Dec · Chip schema + cost model v1 + physics checks**
-- **Tasks:** chip JSON schema + validator (§10); profiles `t4-guess`, `balanced`, `blackwell-like`; op/byte counting; analytical model (§11.1); hard invariant + soft flag (§12).
-- **Using:** `jsonschema`. **Learn:** roofline paper.
-- **Done-check:** memory-bound ↔ compute-bound switch where roofline predicts.
-
-**Week 4 — 21–27 Dec · Cost model v2 (scheduler)**
-- **Tasks:** dependency graph; unit queues; async copy + wait; barrier; occupancy; trace (§11.2).
-- **Using:** `heapq`. **Learn:** PMPP ch. 5.
-- **Done-check:** double buffering helps only on chips with async copy.
-
-**Week 5 — 28 Dec–3 Jan · Capacity effects**
-- **Tasks:** bank conflicts (any bank count), asymmetric SMEM R/W, live registers + spills, divergence, L2 reuse, launch overhead, uncoalesced gather penalty (§11.3).
-- **Learn:** PMPP ch. 6; CUDA guide shared-memory section.
-- **Done-check:** stride-32 → 32-way conflict on 32 banks; correct degree on 23 banks.
-
-**Week 6 — 4–10 Jan · Hand-written FA2-style attention**
-- **Tasks:** tiled attention + online softmax in Tile IR; tile variants; W3 schedule family; first Playground notebook (C7).
-- **Learn:** FlashAttention 1 & 2.
-- **Done-check:** tiled beats naive on all profiles.
-
-**Week 7 — 11–17 Jan · Hand-written FA4-style tricks**
-- **Tasks:** polynomial `2^x` from `bitcast`+`shl`+`fma`; conditional rescaling; partial MUFU/FMA split; accuracy + cycles on `blackwell-like` vs `balanced`.
-- **Learn:** FA4 paper; floating-point exp implementation (Cody–Waite, Muller).
-- **Done-check:** polynomial exp passes τ on all distributions.
-
-**Week 8 — 18–24 Jan · GATE 1: fidelity**
-- **Tasks:** E0a (FA4 vs FA2 on both profiles) + fusion check; `docs/weekly/gate1_report.md`; fix any twin mismatch now.
-- **Done-check (G1):** FA4 tricks ≥ 10% faster on `blackwell-like`, ≤ 3% on `balanced`.
-
-**Week 9 — 25–31 Jan · CUDA basics + T4 microbenchmarks**
-- **Tasks:** `nvcc -arch=sm_75` on Kaggle; microbenchmarks (§21.1), 30 reps; CSV with GPU/driver/CUDA info.
-- **Learn:** CUDA C++ guide basics, PTX `ex2.approx`, WMMA, CUDA events.
-- **Done-check:** stable numbers (CV < 5%).
-
-**Week 10 — 1–7 Feb · Fit profiles + second NVIDIA GPU**
-- **Tasks:** fit `t4-cal`; rent 1–2 h A100/L4 → second profile; update `blackwell-like` assumptions; `docs/calibration.md`.
-- **Using:** `scipy.optimize`, cloud GPU.
-- **Done-check:** fitted values within ±30% of microbenchmarks.
-
-**Week 11 — 8–14 Feb · Lowering IR → CUDA (W1, W3)**
-- **Tasks:** template lowering with `nvcuda::wmma` (16×16×16); `ex2.approx.f32`; check SASS for `HMMA`; correctness vs interpreter.
-- **Learn:** WMMA API; `cuobjdump -sass`.
-- **Done-check:** 10 variants per op compile and match.
-
-**Week 12 — 15–21 Feb · GATE 2: sim-to-real (end of Phase 1)**
-- **Tasks:** ≥ 30 variants per op across many axes (bank conflicts, spills, occupancy, MUFU vs FMA-exp, fused/unfused); A/B interleaved timing with an anchor kernel; fit on half, test ρ on half; `gate2_report.md`.
-- **Done-check (G2):** **ρ ≥ 0.8 on T4.** Guardrail 1 lifts.
-
-### PHASE 2 — SHARED ENGINE
-
-**Week 13 — 22–28 Feb · Judge v1**
-- **Tasks:** static checks; Z3 bounds with explicit grid/loop/clamp premises; hidden tests D1–D4 + S1–S5; two-tier white-box adversary hook; reference sanity gate; canary set (§14).
-- **Learn:** Z3 Python tutorial.
-- **Done-check:** canaries pass; out-of-bounds kernel rejected.
-
-**Week 14 — 1–7 Mar · Hacker–fixer + adversary**
-- **Tasks:** 10-hack library in Tile IR; white-box adversary (cheap LLM); hacker round; add-only fixes (§15).
-- **Done-check:** fresh-hacker attack success < 5%; canaries still pass.
-
-**Week 15 — 8–14 Mar · Alien chips + all workloads**
-- **Tasks:** generator (§10.3) incl. cliff, truly-alien, saturated, silent-fallback chips; splits A–M / N–Z / sealed (hash); tasks W4 (CSA), W5, W6, W7.
-- **Learn:** DeepSeek-V4 CSA/HCA section.
-- **Done-check:** every chip validates; baselines run on every chip.
-
-**Week 16 — 15–21 Mar · GATE 3: ground truth + taxonomy + ledger**
-- **Tasks:** schedule families; exhaustive/CP-SAT search using cost model only (§16); taxonomy classifier (§17); SQLite ledger (§19).
-- **Learn:** OR-Tools CP-SAT basics.
-- **Done-check (G3):** optimum for all (chip, task); diverse optima; FA4 trick classified B, diag rewrite C.
-
-**Week 17 — 22–28 Mar · GATE 4: agent loop + pilot + budget**
-- **Tasks:** agent loop + session protocol (§18); tools workspace + Distill phase (§20); time-machine pinning (original **DeepSeek-R1, Jan 2025** + **DeepSeek-R1-Distill-Qwen-32B** pinned by Hugging Face commit SHA) + contamination probe; 10 pilot runs; final run matrix; freeze pre-reg v2 + analysis scripts (hash, OSF).
-- **Done-check (G4):** projected cost ≤ cap; runs need no manual help.
-
-### PHASE 3 — SPLIT TRACKS
-
-| Week | Dates | Track A — Science (mostly automated) | Track B — Product (hands-on) |
-|---|---|---|---|
-| **18** | 29 Mar–4 Apr | Start E1 (cheap model, familiar + alien) | Install TileLang; rent AMD GPU for a few hours; run TileLang's own GEMM example on AMD. If unusable → Triton on ROCm (log it). |
-| **19** | 5–11 Apr | E1 frontier subset | IR → TileLang lowering for W1 GEMM; correctness on AMD |
-| **20** | 12–18 Apr | E2 time machine (pinned R1 + SHA-pinned open model + modern model; blackwell-like vs balanced) | IR → TileLang lowering for W3 attention; correctness on AMD |
-| **21** | 19–25 Apr | E3 train on A–M (K = 3 rounds, each ending with a Distill session + unit tests) | AMD microbenchmarks → `amd-cal`; ρ on ~20 variants. **Gate B1: ρ ≥ 0.7**. Start customer conversations (2–3/week). |
-| **22** | 26 Apr–2 May | E3 test: v0 vs vK on N–Z + ablations | **Studio v0 (C4):** YAML in → engine per design → report (cycles, bottleneck, perf/area Pareto) |
-| **23** | 3–9 May | E4 honesty (incl. 5 silent-fallback chips) + E5 bloat | **E8 co-design (core):** 10–20 design variants; AI-guided vs random-search configs |
-| **24** | 10–16 May | E6: best T4 kernels on real T4; sealed audit | Engine on `amd-cal` → lower best kernels via TileLang → measure on real AMD vs baselines |
-| **25** | 17–23 May | Analysis (frozen scripts); human review of B/C kernels | **Gate B2:** engine ≥ baseline on ≥ 2 ops on AMD, or Studio predictions confirmed on AMD variants. Record 3-min demo video. |
-| **26** | 24–30 May | Paper draft | Package Studio: `pip install`, docs, 2 example studies, README with demo results |
-
-### PHASE 4 — LAUNCH
-
-**Week 27 — 31 May–6 Jun · Review + pre-release:** guide reviews paper; fresh-clone reproducibility (`make reproduce-E1`); finish ≥ 15 customer conversations.
-
-**Week 28 — 7–13 Jun · Release:** repo public; arXiv; release C2 + C4 + C5 results; blog post/thread with 3 findings + demo video.
-
-**Week 29 — 14–20 Jun · Submit + design partners:** submit to a workshop (ML for systems / AI for science / agents — check deadlines); post in GPU MODE, TileLang, RISC-V and hardware communities; offer a **free Studio design-space study** to 3 teams.
-
-**Week 30 — 21–27 Jun · GATE S: go/no-go + retrospective:**
-- **Go** if ≥ 3 teams actively testing Studio or asking for a study, and you can name the pain they pay for today.
-- **No-go** (still a win): paper + open source + skills → AI systems / compiler / kernel roles, PhD applications.
-- Write `docs/retrospective.md`; plan v3.
 
 ---
 
@@ -263,57 +123,6 @@ Buffer   Weeks 31–32     exams / gate slips
 | G4 Budget | 17 | Cost ≤ cap, unattended runs | Cut reruns/chips; apply for credits |
 | B1 AMD twin | 21 | ρ ≥ 0.7 | AMD for real measurements only, no simulator claims |
 | B2 Real demo | 25 | ≥ 2 ops at/above baseline on AMD, or Studio predictions confirmed | Demo on T4 + simulator; AMD as next step |
-| S Startup | 30 | ≥ 3 engaged teams + clear pain | Career path with portfolio; keep open source |
-
----
-
-## I-10. Track B — product and startup steps
-
-### Alien Silicon Studio (C4)
-- **Input:** YAML with N chip designs (memory sizes, bandwidths, unit counts/speeds, special units), a simple area model, target workloads.
-- **Does:** for each design, the agent writes kernels, the judge verifies them, the twin measures them.
-- **Output:** per-design report (best verified kernels, cycles, bottleneck unit, perf/area), Pareto chart, confidence note (twin fidelity, what is not modeled).
-- **Different because:** existing tools tune kernels for chips that already exist; Studio works **before silicon**, on designs nobody has programmed — what Track A proves.
-
-### Competition (keep updating)
-Autocomp (LLM-driven search; beat Gemmini's vendor library), KernelCraft (agents on emerging hardware), Gao et al. 2026 (agentic kernel generation on Gemmini/PLENA), Redko et al. 2026 ("Prior Knowledge or Search?" — LLM priors vs search in kernel optimization), a Fluidstack case study of an agent loop learning a new accelerator, Modular (now Qualcomm; portable software by human engineers), chip vendors' in-house teams.
-**Our edge:** (1) proven invention on never-seen hardware, (2) pre-silicon design comparison, (3) a judge that is hard to cheat, (4) open source.
-
-### Customer discovery (from Week 21)
-- **Who:** AI-chip and RISC-V accelerator startups (India, US, Europe); IIT/IIIT/IISc hardware labs and global architecture labs; open-source accelerator projects; TileLang/TVM/MLIR compiler engineers; semiconductor programs.
-- **Ask:** (1) How do you choose between design options today? (2) When did you first run real AI models on a new design, and how long did software take? (3) What does writing the first fast kernels cost (people, months)? (4) Would a design-option report on real AI workloads change a decision? (5) What would you need to trust it?
-- **Log** every conversation in `docs/customers.md` (date, role, pain, quote, follow-up).
-
-### Business model (if Gate S = go)
-- **Open core:** engine + benchmark free and open source.
-- **Paid:** design-space studies; private Studio deployment; later, verified operator libraries for a customer's chip.
-- **Funding paths:** university and city incubators (e.g. T-Hub Hyderabad, IIIT-H CIE, IIT Madras incubation), IndiaAI / MeitY AI and semiconductor programs, open-hardware grants, deep-tech seed accelerators. Check current eligibility before applying.
-
----
-
-## I-11. Budget
-
-| Item | Estimate |
-|---|---|
-| Rented NVIDIA GPU for calibration (Week 10) | $10–30 |
-| Rented AMD GPU (Weeks 18–25, ~20–40 h; check prices) | $50–150 |
-| LLM API — Track A | $150–500 |
-| LLM API — Track B | $50–150 |
-| Rented GPU for SHA-pinned time-machine model | $10–30 |
-| **Global hard cap** | **≈ $800** (re-estimate after Week 17 pilot) |
-
-Save with prompt caching, cheap models for bulk, two-tier adversary, result caching (§29). Ask your guide about university GPU access and academic API credits.
-
----
-
-## I-12. This week (Week 0)
-
-1. Create the GitHub repo and folders (I-15.4).
-2. Put this plan in `docs/master_plan.md`.
-3. Draft `docs/preregistration_v1.md`.
-4. Kaggle account + T4 test.
-5. Meet/email your M.Tech guide with I-1.
-6. Start PMPP chapter 1.
 
 ---
 
@@ -349,32 +158,6 @@ Save with prompt caching, cheap models for bulk, two-tier adversary, result cach
 | Writing | Markdown, LaTeX (Overleaf), Zotero (citations) |
 | Pre-registration | OSF account (free) |
 
-### I-13.3 Accounts
-
-GitHub · Kaggle · Google (Colab) · one or two LLM API providers (one cheap open model, one frontier model) · Hugging Face (open weights) · a GPU cloud that rents AMD and NVIDIA by the hour · OSF · arXiv (endorsement may be needed — ask your guide) · Zotero.
-
-### I-13.4 Skills (learn in this order, just in time)
-
-| Weeks | Skill | Source |
-|---|---|---|
-| 0–6 | GPU architecture basics, memory hierarchy, tiling, occupancy | PMPP ch. 1–6 |
-| 1 | Writing a small IR/interpreter in Python | your own code + Python `ast` docs |
-| 3 | Roofline model, arithmetic intensity | Williams et al. 2009 |
-| 6–7 | Attention algorithms, online softmax, exp implementation | FlashAttention 1/2/4 papers; Muller's handbook |
-| 9–12 | CUDA C++, WMMA, PTX basics, timing | CUDA C++ Programming Guide; PTX ISA |
-| 13 | SMT solving basics | Z3 tutorial |
-| 16 | Constraint programming | OR-Tools CP-SAT guide |
-| 17–25 | Statistics: bootstrap, Wilcoxon, Holm | SciPy docs; any intro stats text |
-| 18–21 | TileLang, ROCm basics | TileLang docs/examples; AMD ROCm docs |
-| 21+ | Customer interviews | "The Mom Test" (Rob Fitzpatrick) |
-
-### I-13.5 People
-
-- **M.Tech guide** — supervision, co-author, arXiv endorsement, university GPU access.
-- **1–2 collaborators** (optional but strongly recommended for Track B) — a classmate strong in C++/hardware.
-- **Reviewers** — a GPU MODE community member or a senior student to double-check B/C discoveries (blind review, Cohen's κ).
-- **15+ interviewees** — Track B customer discovery.
-
 ### I-13.6 Data and models
 
 - Chip specs: public datasheets and whitepapers (T4/Turing, Ampere, Hopper, Blackwell) + your own microbenchmarks.
@@ -402,7 +185,7 @@ GitHub · Kaggle · Google (Colab) · one or two LLM API providers (one cheap op
 8. **Scoring:** `frac_opt = T_opt_F / cycles`. If > 1.02, the agent left the known family → taxonomy classifier (A/B/C) → human review. Example finding: "Level B: the agent moved 30% of exponentials from MUFU to an FMA polynomial built from bitcast and shifts, and padded shared memory to break 23-bank conflicts."
 9. **Self-improvement:** after each training round, a Distill session turns repeated wins into tested Python tools (bottleneck profiler, pre-screen filter, IR transforms). vK (with tools) is compared with v0 (empty) on unseen chips at the same budget.
 10. **Reality check:** the same kernels lowered to CUDA run on a real T4 (Track A), or through TileLang on a real AMD GPU (Track B), to confirm that simulator wins are real wins.
-11. **Product use:** Studio runs steps 2–8 for each of a customer's design options and writes a comparison report.
+11. **Product use:** Studio runs steps 2–8 for each of a chip team's design options and writes a comparison report.
 
 ---
 
@@ -475,7 +258,7 @@ area model ───► Area/cost calculator ───────────�
 alien-silicon/
 ├── README.md · LICENSE · pyproject.toml · Makefile
 ├── docs/            master_plan.md, preregistration_v*.md, decision_log.md,
-│                    ir_reference.md, calibration.md, customers.md, weekly/
+│                    ir_reference.md, calibration.md, weekly/
 ├── aliensilicon/
 │   ├── ir/          DSL, IR structures, JSON I/O
 │   ├── interp/      NumPy interpreter
@@ -580,10 +363,6 @@ budget_usd_per_design: 15
    - best verified kernels for each design (IR + TileLang source);
    - confidence section: twin fidelity on calibrated chips, effects not modeled.
 4. Optional: lower the top kernels to TileLang and run them on a similar real chip to check.
-
-### C5 AMD demo — investors and partners
-
-- `make demo-amd` (on a rented AMD GPU): builds the TileLang kernels found by the engine, runs them against baselines, prints a table and saves plots. 3-minute video in the README.
 
 ### C6 T4 kernels — Kaggle/Colab users
 
@@ -691,7 +470,7 @@ out = ak.attention(q, k, v, causal=True)   # fp16, T4 (sm_75)
 
 # PART II — TECHNICAL SPECIFICATION (from v1.1, patched in v2.3)
 
-> Still valid, except: (a) v1.1's old timeline and gates (former §30–31) are **replaced** by Part I (I-8, I-9); (b) **E8 co-design is a core experiment** (Track B, Week 23); (c) E7 black-box chips and E9 forecasts are **stretch only**; (d) the Tile IR must follow I-5; (e) a second real platform, **AMD via TileLang** (`amd-cal`, Gate B1), is added; (f) the repo layout in I-15.4 replaces §27 where they differ; (g) the budget in I-11 replaces §29's totals.
+> Still valid, except: (a) v1.1's old timeline and gates (former §30–31) are **replaced** by Part I (I-6, I-9); (b) **E8 co-design is a core experiment** (Track B, Week 23); (c) E7 black-box chips and E9 forecasts are **stretch only**; (d) the Tile IR must follow I-5; (e) a second real platform, **AMD via TileLang** (`amd-cal`, Gate B1), is added; (f) the repo layout in I-15.4 replaces §27 where they differ.
 
 
 ## 3. Research questions, hypotheses and success criteria
@@ -1491,12 +1270,6 @@ Save as `docs/preregistration_v1.md`, compute `sha256sum`, post the hash on OSF 
 
 ---
 
-## 29. Compute and money budget
-
-**Replaced by Part I, Section I-11 (budget) and I-13.1 (hardware).** Money-saving tips still apply: prompt caching, two-tier adversary, cheap models for bulk work, result caching, early stop at `frac_opt ≥ 0.98`, academic credit programs.
-
----
-
 ## 32. Risks and how we handle them
 
 | # | Risk | Effect | Handling |
@@ -1550,32 +1323,6 @@ Save as `docs/preregistration_v1.md`, compute `sha256sum`, post the hash on OSF 
 - First: a workshop at NeurIPS / ICML / ICLR on AI for science, ML for systems, or agents.
 - Then: MLSys, ICLR, ICML, or NeurIPS (Datasets & Benchmarks track fits the benchmark part).
 - Always: arXiv + GitHub release.
-
----
-
-## 35. Learning resources (in order)
-
-1. **PMPP** — *Programming Massively Parallel Processors* (Hwu, Kirk, El Hajj), 4th ed. Chapters 1–6 by Week 5.
-2. **NVIDIA CUDA C++ Programming Guide** — basics, shared memory, WMMA (Weeks 9–11).
-3. **PTX ISA docs** — `mma.sync`, `ex2.approx` (Week 9–11).
-4. **Roofline paper** — Williams, Waterman, Patterson (2009) (Week 3).
-5. **FlashAttention 1, 2, 4 papers** (Weeks 6–7).
-6. **KernelBench, KernelBench-Verified, CUDA Agent, KernelCraft** (Weeks 13–14).
-7. **Z3 Python tutorial**; **OR-Tools CP-SAT guide** (Weeks 13, 16).
-8. **LLMs Get Lost; AI co-mathematician; Self-Building Labs** (Week 17).
-9. **Darwin Gödel Machine; SEIS; AlphaEvolve blog** (Week 21).
-10. **GPU MODE** community (lectures + Discord) — any time you are stuck.
-11. **Muller, Handbook of Floating-Point Arithmetic** (elementary functions chapter) (Week 7).
-
----
-
-## 36. Weekly routine
-
-- **Monday:** read this plan's week; write 3 goals in `docs/weekly/week_NN.md`.
-- **Tue–Fri:** build + test. Commit every day. Every new function gets a test.
-- **Saturday:** learning block (the week's "Learn" item) + arXiv novelty check (every 2nd week).
-- **Sunday:** rest.
-- **End of week:** fill `week_NN.md`: done / not done / blockers / decisions. Update decision log if the plan changed. Send a 5-line update to your advisor every 2 weeks.
 
 ---
 
