@@ -2,6 +2,15 @@
 
 Newest first. One entry per decision that changes the spec or that a reviewer might ask about.
 
+## 2026-11-23 · Red-team round 1 (see `red_team.md`)
+
+1. **Annotations must be the literal `GMEM[dtype, (dims…)]`.** String annotations allowed a sandbox escape (A1). `from __future__ import annotations` is not supported in kernel code.
+2. **The judge trusts only IR JSON that the DSL rebuilds byte-identically** (`judge/ir_check.py`). The interpreter assumes validated IR.
+3. **Synchronization is checked, not assumed.** SMEM/TMEM read-after-write, write-after-read, and async copies used before `wait`, all without a `barrier()`, are errors. So is a GMEM element written by two CTAs, or read after another CTA wrote it, within one launch. This makes the IR's synchronization semantics stricter than "whatever the interpreter happens to do".
+4. **Hidden tests are now D1–D4 plus S1–S4.** S5 (other shapes) is still to do. The S3 scale is per task: GEMM ×10, softmax and attention ×100.
+5. **Resource caps:** 2²⁰ elements per alloc, 65,536 CTAs, and a work budget of about 2 s of interpretation per run.
+6. **Open question for you:** should dropping softmax probabilities below about 1e-4 count as correct? See red_team.md §2.3.
+
 ## 2026-11-23 · Week 2 interpreter
 
 1. **Correctness rule (needs your sign-off before the pre-registration is frozen):** pass iff every output is finite and |out − ref| ≤ τ·(|ref| + max|ref|), with τ = 1e-3. A fixed absolute term of τ let a softmax that was 1% wrong, or even all zeros, pass, because softmax values are about 1/cols ≈ 0.004. The rule above scales with the output and fails both cases (`tests/test_interp.py::test_reference_catches_a_wrong_kernel`).

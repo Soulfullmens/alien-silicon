@@ -51,6 +51,18 @@ The spec is §8 and I-5 of `master_plan.md`. This page records what the code in 
 - `reduce(sum)` uses NumPy pairwise order in the tile dtype. This may need to match the chip's tree order later.
 - `barrier`, `wait` and `async_copy` run immediately. Race and hazard modelling is the cost model's job.
 
+## Synchronization rules (checked by the interpreter)
+
+- Reading an SMEM/TMEM tile written since the last `barrier()` is a race. So is writing one that was read since the last barrier. Allocating with `init` counts as a write.
+- An `async_copy` destination can't be read or written until `wait(group)`, and then only after a `barrier()`.
+- Within one launch, a GMEM element may be written by at most one CTA, and no CTA may read an element another CTA wrote. Cross-CTA communication goes through separate launches in a `@program`.
+
+## Judge entry points
+
+- `judge.static_check.build_submission(source)`: agent DSL source → IR, after the AST allow-list. Kernel params must be annotated literally as `GMEM[dtype, (dims…)]`.
+- `judge.ir_check.load_kernel(json)` / `load_program(json)`: the only way IR JSON gets in. It is replayed through the DSL and must match byte for byte.
+- `judge.correctness.run_tests(task, kernel)`: D1–D4 and S1–S4. Each runs twice, with different garbage and a shuffled CTA order. Results must be bit-identical, inputs untouched, and outputs within τ.
+
 ## Not checked yet (later weeks)
 
 - Whether index or slice extents match the destination shape. This is the Z3 bounds check in judge step 2.

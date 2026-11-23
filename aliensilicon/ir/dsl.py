@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import builtins
 import inspect
+import math
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
@@ -45,7 +46,7 @@ class Space(str):
     def __getitem__(self, key: Any) -> ParamType:  # type: ignore[override]
         dtype, shape = key
         _check_dtype(dtype)
-        return ParamType(str(self), dtype, tuple(shape))
+        return ParamType(str(self), dtype, _shape(shape))
 
 
 GMEM, SMEM, RMEM, TMEM = Space("GMEM"), Space("SMEM"), Space("RMEM"), Space("TMEM")
@@ -97,7 +98,8 @@ def _check_dtype(dtype: str) -> None:
 # ---------------------------------------------------------------- builder
 
 class _Builder:
-    def __init__(self) -> None:
+    def __init__(self, grid: tuple[Dim, ...] = ()) -> None:
+        self.grid = grid
         self.values: list[Value] = []
         self.blocks: list[Block] = [Block()]
 
@@ -125,9 +127,24 @@ def _b() -> _Builder:
 def _operand(x: Any) -> Any:
     if isinstance(x, Tile):
         return x.ref
-    if isinstance(x, (int, float)) and not isinstance(x, bool):
+    if isinstance(x, int) and not isinstance(x, bool):
+        if not -(2**31) <= x < 2**31:
+            raise DSLError(f"int literal {x} does not fit in i32")
+        return x
+    if isinstance(x, float):
+        if not math.isfinite(x):
+            raise DSLError(f"float literal {x} must be finite")
         return x
     raise DSLError(f"operand must be a tile or number, got {type(x).__name__}")
+
+
+def _shape(shape: Any) -> tuple[Dim, ...]:
+    shape = tuple(shape)
+    for d in shape:
+        ok = (isinstance(d, int) and not isinstance(d, bool) and d > 0) or (isinstance(d, str) and d.isidentifier())
+        if not ok:
+            raise DSLError(f"shape dim {d!r} must be a positive int or a symbolic name")
+    return shape
 
 
 def _ref(x: Tile | View) -> tuple[Tile, dict[str, Any]]:
@@ -150,7 +167,7 @@ def alloc(space: str, shape: tuple[Dim, ...], dtype: str, *, init: float | None 
     if space not in (SMEM, RMEM, TMEM):
         raise DSLError("alloc space must be SMEM, RMEM or TMEM (GMEM comes from params/buffers)")
     _check_dtype(dtype)
-    t = _b().new(dtype, tuple(shape), str(space))
+    t = _b().new(dtype, _shape(shape), str(space))
     attrs = _layout(pad, swizzle, stride)
     if init is not None:
         attrs["init"] = _operand(init)
@@ -321,8 +338,7 @@ def reduce(op: str, x: Tile, axis: int, scope: str = "cta", keepdims: bool = Fal
 
 def serial(n: Dim, unroll: bool = False) -> Iterator[Tile]:
     """`for i in serial(n):` records ONE loop op; the body is traced once."""
-    if not isinstance(n, (int, str)) or isinstance(n, bool):
-        raise DSLError("loop bound must be static (int or symbolic dim)")
+    n = _shape((n,))[0]  # static: a positive int or a symbolic dim
     b = _b()
     i = b.new("i32", (), "RMEM")
     b.blocks.append(Block())
@@ -347,13 +363,21 @@ def barrier() -> None:
     _b().emit("barrier", [], [], "control")
 
 
+def _axis(axis: Any) -> int:
+    if not isinstance(axis, int) or isinstance(axis, bool) or not 0 <= axis < len(_b().grid):
+        raise DSLError(f"grid axis {axis!r} out of range for a {len(_b().grid)}-D grid")
+    return axis
+
+
 def program_id(axis: int) -> Tile:
+    _axis(axis)
     t = _b().new("i32", (), "RMEM")
     _b().emit("program_id", [], [t], "none", {"axis": axis})
     return t
 
 
 def num_programs(axis: int) -> Tile:
+    _axis(axis)
     t = _b().new("i32", (), "RMEM")
     _b().emit("num_programs", [], [t], "none", {"axis": axis})
     return t
@@ -376,21 +400,23 @@ class KernelDef:
     def __init__(self, fn: Any, grid: tuple[Dim, ...], threads: int):
         if not isinstance(threads, int) or threads <= 0:
             raise DSLError("threads must be a positive int")
-        self.fn, self.grid, self.threads = fn, tuple(grid), threads
+        self.fn, self.grid, self.threads = fn, _shape(grid), threads
         self.name = fn.__name__
         self._built: Kernel | None = None
 
     def param_types(self) -> list[tuple[str, ParamType]]:
         out = []
-        for p in inspect.signature(self.fn, eval_str=True).parameters.values():
+        for p in inspect.signature(self.fn).parameters.values():
+            # Never eval string annotations (eval_str): that is an exec of arbitrary code.
             if not isinstance(p.annotation, ParamType) or p.annotation.space != "GMEM":
-                raise DSLError(f"{self.name}: param {p.name} needs a GMEM[dtype, shape] annotation")
+                raise DSLError(f"{self.name}: param {p.name} needs a GMEM[dtype, shape] annotation "
+                               "(string annotations and `from __future__ import annotations` are not supported)")
             out.append((p.name, p.annotation))
         return out
 
     def build(self) -> Kernel:
         if self._built is None:
-            b = _Builder()
+            b = _Builder(self.grid)
             args, params = [], []
             for name, pt in self.param_types():
                 t = b.new(pt.dtype, pt.shape, "GMEM")
@@ -438,7 +464,7 @@ def buffer(shape: tuple[Dim, ...], dtype: str) -> Buf:
         raise DSLError("buffer() is only allowed in a @program body")
     _check_dtype(dtype)
     prog = _programs[-1]
-    b = Buf(f"tmp{len(prog['buffers'])}", dtype, tuple(shape))
+    b = Buf(f"tmp{len(prog['buffers'])}", dtype, _shape(shape))
     prog["buffers"].append({"name": b.name, "dtype": dtype, "shape": list(b.shape)})
     return b
 
@@ -450,7 +476,7 @@ class ProgramDef:
     def build(self) -> Program:
         state: dict[str, Any] = {"kernels": {}, "launches": [], "buffers": []}
         args, params = [], []
-        for p in inspect.signature(self.fn, eval_str=True).parameters.values():
+        for p in inspect.signature(self.fn).parameters.values():
             pt = p.annotation
             if not isinstance(pt, ParamType) or pt.space != "GMEM":
                 raise DSLError(f"{self.name}: param {p.name} needs a GMEM[dtype, shape] annotation")

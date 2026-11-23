@@ -15,7 +15,9 @@ The full plan is in [`docs/master_plan.md`](docs/master_plan.md) (v2.3).
 | Paper-check kernels: row copy, naive softmax (§8.4), naive GEMM | `aliensilicon/tasks/baselines/` |
 | IR reference with the TileLang mapping | `docs/ir_reference.md` |
 | NumPy interpreter: exact f16/f32 rounding, seeded garbage memory and MUFU error, deterministic | `aliensilicon/interp/` |
-| W1 GEMM, W2 softmax, W3 attention: spec, float64 reference, naive baseline, correct at τ on D1–D4 | `aliensilicon/tasks/` |
+| W1 GEMM, W2 softmax, W3 attention: spec, float64 reference, naive baseline, correct at τ on D1–D4 and S1–S4 | `aliensilicon/tasks/` |
+| Judge: IR JSON replay check, hidden tests, race and input-mutation detection | `judge/` |
+| Red-team round 1: 13 working attacks found and fixed, each with a regression test | `docs/red_team.md` |
 
 ## Which folder belongs to which track
 

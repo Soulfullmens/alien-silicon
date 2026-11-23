@@ -77,10 +77,30 @@ def _decorator_kind(fn: ast.FunctionDef) -> str:
     return ""
 
 
+def _check_annotation(fn: ast.FunctionDef, p: ast.arg) -> None:
+    """Annotations must be literally GMEM[dtype, (dims...)].
+
+    A string annotation would be a Constant that passes the node allow-list and
+    is later eval()'d by anything that resolves annotations: a full sandbox escape.
+    """
+    ann = p.annotation
+    ok = (
+        isinstance(ann, ast.Subscript) and isinstance(ann.value, ast.Name) and ann.value.id == "GMEM"
+        and isinstance(ann.slice, ast.Tuple) and len(ann.slice.elts) == 2
+        and isinstance(ann.slice.elts[0], ast.Name) and ann.slice.elts[0].id in ("f16", "f32", "i32", "i8")
+        and isinstance(ann.slice.elts[1], ast.Tuple)
+        and all(isinstance(d, ast.Constant) and type(d.value) in (int, str) for d in ann.slice.elts[1].elts)
+    )
+    if not ok:
+        _fail(p, f"{fn.name}: param {p.arg} must be annotated as GMEM[dtype, (dims...)]")
+
+
 def _check_function(fn: ast.FunctionDef, kernel_names: set[str]) -> None:
     a = fn.args
     if a.posonlyargs or a.vararg or a.kwonlyargs or a.kwarg or a.defaults or fn.returns:
         _fail(fn, f"{fn.name}: plain annotated params only (no defaults, *args, **kw, return annotation)")
+    for p in a.args:
+        _check_annotation(fn, p)
     if any(isinstance(n, ast.FunctionDef) for n in ast.walk(fn) if n is not fn):
         _fail(fn, f"{fn.name}: nested functions are not allowed")
 
@@ -134,5 +154,11 @@ def build_submission(source: str) -> dict[str, Any]:
     tree.body = [n for n in tree.body if not isinstance(n, ast.ImportFrom)]
     env: dict[str, Any] = {name: getattr(ir, name) for name in DSL_NAMES}
     env["__builtins__"] = {}
-    exec(compile(tree, "<submission>", "exec"), env)  # noqa: S102 - allow-listed above
-    return {n.name: env[n.name].build() for n in tree.body if isinstance(n, ast.FunctionDef)}
+    # dont_inherit: never pass this module's __future__ flags into agent code.
+    try:
+        exec(compile(tree, "<submission>", "exec", dont_inherit=True), env)  # noqa: S102 - allow-listed above
+        return {n.name: env[n.name].build() for n in tree.body if isinstance(n, ast.FunctionDef)}
+    except ir.DSLError:
+        raise
+    except Exception as e:  # noqa: BLE001 - agent code must never crash the judge with a raw error
+        raise Rejected(f"build failed: {type(e).__name__}: {e}") from None

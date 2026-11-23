@@ -177,11 +177,11 @@ def test_unwritten_output_is_garbage():
 
 def test_out_of_bounds_load_fails():
     @kernel(grid=(3,), threads=32)
-    def oob(X: GMEM[f32, (8,)], Y: GMEM[f32, (8,)]):
+    def oob(X: GMEM[f32, (8,)], Y: GMEM[f32, (12,)]):
         x = alloc(RMEM, (4,), f32)
         s = imul(program_id(0), 4)
         load(X[s:iadd(s, 4)], x)  # third CTA reads X[8:12]
-        store(x, Y[0:4])
+        store(x, Y[s:iadd(s, 4)])
 
     with pytest.raises(InterpError, match="out of bounds"):
         run_kernel(oob.build(), {"X": np.ones(8, np.float32)})
