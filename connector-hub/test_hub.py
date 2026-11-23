@@ -115,4 +115,62 @@ try:
 except server.ToolError as e:
     assert "not_in_channel" in str(e)
 
+# count parsing for "most liked"
+assert [server._num(x) for x in ("12.3K", "1.2M", "1,234", "", "abc", "987")] == [12300, 1200000, 1234, 0, 0, 987]
+
+# analyze_recording: upload -> wait -> watch -> save details -> delete Gemini copy -> delete local file
+os.environ["GEMINI_API_KEY"] = "gk"
+rec = os.path.join(os.environ["HUB_HOME"], "rec.mp4")
+open(rec, "wb").write(b"0" * 3000000)
+log = []
+
+
+class H(R):
+    def __init__(self, data, headers=None):
+        super().__init__(data)
+        self.headers = headers or {}
+
+
+def gem(method, url, headers=None, **kw):
+    log.append((method, url.split("googleapis.com")[-1]))
+    if "content" in kw:
+        assert sum(len(c) for c in kw["content"]) == 3000000 and headers["Content-Length"] == "3000000"
+        return H({"file": {"name": "files/f1", "uri": "u1", "state": "PROCESSING"}})
+    if url.endswith("/upload/v1beta/files"):
+        assert headers["x-goog-api-key"] == "gk"
+        return H({}, {"x-goog-upload-url": "https://up/1"})
+    if url.endswith("/files/f1") and method == "GET":
+        return H({"file": None, "name": "files/f1", "uri": "u1", "state": "ACTIVE"})
+    if ":generateContent" in url:
+        assert kw["json"]["contents"][0]["parts"][0]["file_data"]["file_uri"] == "u1"
+        reels = [{"platform": "Instagram", "creator": "@a", "hashtags": ["#fit", "#gym"], "audio": "Song X",
+                  "likes": "12K", "format": "POV", "topic": "fitness", "hook": "h"},
+                 {"platform": "TikTok", "creator": "@b", "hashtags": ["#fit"], "audio": "Song X",
+                  "likes": "1.5M", "format": "tutorial", "topic": "fitness", "hook": "h"}]
+        return H({"candidates": [{"content": {"parts": [{"text": server.json.dumps(reels)}]}}]})
+    return H({})
+
+
+server.httpx.request = gem
+out = server.analyze_recording(file_path=rec)
+assert out["videos_found"] == 2 and not os.path.exists(rec)
+assert ("DELETE", "/v1beta/files/f1") in log
+
+t = server.trending(days=1)
+assert t["videos_seen"] == 2 and t["top_hashtags"][0] == ("#fit", 2) and t["top_audio"] == [("Song X", 2)]
+assert t["most_liked"][0]["creator"] == "@b"
+assert server.trending(days=1, platform="tiktok")["videos_seen"] == 1
+
+# generate_image: PNG from Gemini is saved as JPEG (Instagram requirement) with an unguessable public URL
+import base64, io
+from PIL import Image
+buf = io.BytesIO()
+Image.new("RGBA", (4, 4), (255, 0, 0, 128)).save(buf, "PNG")
+os.environ["HUB_PUBLIC_URL"] = "https://t.example/"
+server.httpx.request = lambda m, u, headers=None, **kw: R({"candidates": [{"content": {"parts": [
+    {"inlineData": {"mimeType": "image/png", "data": base64.b64encode(buf.getvalue()).decode()}}]}}]})
+img = server.generate_image("a gym poster")
+assert img["file_path"].endswith(".jpg") and open(img["file_path"], "rb").read(2) == b"\xff\xd8"
+assert img["public_url"].startswith("https://t.example/") and len(img["public_url"]) > 30
+
 print(f"ok: {len(names)} tools")

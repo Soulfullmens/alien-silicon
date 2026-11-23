@@ -4,7 +4,7 @@ Let any AI use your apps. An MCP server for Google (Gmail, Calendar, Drive, YouT
 
 Works with any MCP client: Claude (Code / Desktop / claude.ai), ChatGPT, Cursor, Codex and others.
 
-## Tools (34)
+## Tools (39)
 
 | App | Tools |
 |---|---|
@@ -19,6 +19,8 @@ Works with any MCP client: Claude (Code / Desktop / claude.ai), ChatGPT, Cursor,
 | Slack | `slack_read`, `slack_send` |
 | GitHub | `github_my_repos`, `github_issues`, `github_create_issue` |
 | Notion | `notion_search`, `notion_create_page` |
+| Trend watcher | `analyze_recording`, `trending` |
+| Content studio | `generate_image`, `generate_video`, `gemini_models` |
 | — | `list_connections` |
 
 Instagram posting needs a **public URL** for each image/video (e.g. a public Drive/S3/Cloudinary link). TikTok uploads a **local file** (up to 64 MB).
@@ -77,6 +79,33 @@ The env vars with your client IDs/secrets must be visible to the server too (add
 python -m hub serve --http          # http://127.0.0.1:8000/mcp
 ```
 then expose it with a tunnel. **Warning:** the HTTP endpoint has no login yet. Anyone with the URL can read your mail and post as you. Only expose it briefly, and never share the URL.
+
+## Trend watcher: record, analyse, ask
+
+You scroll; Gemini watches and listens to the recording; only the details are kept (a few KB per video in `~/.connector-hub/reels.jsonl`). The recording is deleted after analysis by default, so storage stays near zero. Needs `GEMINI_API_KEY` (free at [aistudio.google.com](https://aistudio.google.com)).
+
+**Android** (phone on USB, USB debugging on): install [scrcpy](https://github.com/Genymobile/scrcpy), then
+```bash
+scrcpy --record=feed.mp4 --video-bit-rate=2M --max-size=1080
+```
+Scroll Reels/TikTok on the phone for 5-15 minutes, close scrcpy, then ask your AI: *"analyze feed.mp4"*. Lower bitrate keeps 10 minutes around 150 MB.
+
+**iPhone**: Control Center → Screen Recording → scroll → stop. Upload the video to Google Drive (Drive app → + → Upload), then ask your AI: *"analyze my latest screen recording in Drive"*. (The copy in Drive stays; delete it there yourself.)
+
+Then ask things like: *"what's trending today?"*, *"which sounds came up most this week on TikTok?"*, *"give me 3 reel ideas for my niche from today's trends and make the first one"*.
+
+For each video it saves: platform, creator, caption, hashtags, sound, likes/comments/shares, on-screen text, what is said, the hook, format, topic, niche, why it works, and whether it's an ad. Creator links: `instagram.com/<user>` / `tiktok.com/@<user>`.
+
+## Content studio: generate and post
+
+`generate_image` / `generate_video` save to `~/.connector-hub/media/` under random names. TikTok posts the file directly. Instagram must download it from a public URL:
+```bash
+python -m hub media                                  # serves the media folder on 127.0.0.1:8766
+cloudflared tunnel --url http://localhost:8766       # gives you https://<random>.trycloudflare.com
+```
+Set `HUB_PUBLIC_URL` to that https URL before starting the hub. Folder listing is off, so only the random file names work; stop the tunnel when you're done posting.
+
+Default models: watching uses `gemini-flash-latest`; generation defaults may be renamed by Google, so if one fails, ask the AI to run `gemini_models` and retry with a listed image/video model.
 
 ## Add an app
 
