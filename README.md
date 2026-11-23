@@ -3,7 +3,7 @@
 **Can an AI invent fast code for a chip nobody has ever programmed?**
 
 [![ci](https://github.com/Soulfullmens/alien-silicon/actions/workflows/ci.yml/badge.svg)](https://github.com/Soulfullmens/alien-silicon/actions/workflows/ci.yml)
-[![license](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+[![license](https://img.shields.io/badge/license-AGPL--3.0-blue)](LICENSE)
 ![python](https://img.shields.io/badge/python-3.11%2B-blue)
 [![break the judge](https://img.shields.io/badge/challenge-break%20the%20judge-red)](#break-the-judge)
 
@@ -136,4 +136,4 @@ Read [`CONTRIBUTING.md`](CONTRIBUTING.md). Design decisions are recorded in [`do
 
 ## License
 
-Apache-2.0
+[AGPL-3.0](LICENSE). You are free to use, study and modify Alien Silicon. If you ship it, or run a modified version as a network service, you must publish your full source under the AGPL too. For a commercial license without these terms, open an issue.

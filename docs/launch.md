@@ -34,5 +34,5 @@ Launch: arXiv paper, plus a Show HN with a browser demo of the alien chip explor
 
 ## Before going public with results
 
-- `main` must hold the code, not just the plan. Today the code lives on a branch.
-- `docs/master_plan.md` contains private material: the business model, the M.Tech guide, budgets. Decide whether it stays public.
+- `main` must hold the code, not just the plan.
+- `docs/master_plan.md` is the public edition. The schedule, budgets, people and business sections stay private.

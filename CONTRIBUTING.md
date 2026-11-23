@@ -23,6 +23,8 @@ Week 3 adds the chip schema. We'd like measured numbers from real hardware (MMA 
 
 ## Rules for code
 
+- Contributions are accepted under the project license, [AGPL-3.0](LICENSE).
+
 - `make test` and `make lint` must pass. New logic needs a test.
 - The judge is deterministic. No LLM ever decides pass or fail.
 - The tolerance τ = 1e-3 is locked. Don't change it.
