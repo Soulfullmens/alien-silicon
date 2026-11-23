@@ -2,6 +2,15 @@
 
 Newest first. One entry per decision that changes the spec or that a reviewer might ask about.
 
+## 2026-11-23 · Hardening round 2 (see `red_team.md` §2)
+
+1. **Agent source is built only in the sandbox** (`judge/sandbox.py`). The judge process never executes it.
+2. **Z3 bounds proof is judge step 2.** A counterexample rejects the kernel. "Unproven" (data-dependent indices or a timeout) falls back to the runtime checks.
+3. **Every task has 3 shapes, and all must pass.** Tasks declare output shapes and shape constraints (for example `M % 64 == 0`). Grid functions use `tasks.div` so the same lambda works on ints and on Z3 symbols.
+4. **`mma_k_chunk`** models per-k-step accumulator rounding. Its value is a chip property, set in Week 3.
+5. **Result records carry provenance:** judge hash, IR hash, NumPy and Python versions, sandbox capabilities.
+6. **Still open for you:** the softmax small-probability question (round 1, item 6).
+
 ## 2026-11-23 · Red-team round 1 (see `red_team.md`)
 
 1. **Annotations must be the literal `GMEM[dtype, (dims…)]`.** String annotations allowed a sandbox escape (A1). `from __future__ import annotations` is not supported in kernel code.

@@ -1,7 +1,8 @@
 """NumPy interpreter for Tile IR (§9): exact dtypes, deterministic, seeded.
 
 - f16/f32 ops run in their dtype (NumPy rounds each op to nearest-even).
-- fma and mma compute in float64 and round once to the result dtype.
+- fma computes in float64 and rounds once. mma does too, unless `mma_k_chunk=c`: then it rounds
+  the accumulator after every c-wide slice of K, like a tensor core (c is a chip property).
 - New SMEM/RMEM/TMEM tiles and unset GMEM outputs hold seeded garbage bits.
 - mufu adds seeded error of up to `mufu_ulp_error` ulps.
 - CTAs run one after another over the grid; threads are NumPy vector lanes.
@@ -86,7 +87,8 @@ def _concrete(shape: tuple[Any, ...], dims: dict[str, int]) -> tuple[int, ...]:
 
 
 def run_kernel(kernel: Kernel, inputs: dict[str, np.ndarray], dims: dict[str, int] | None = None, *,
-               seed: int = 0, mufu_ulp_error: float = 0.0, cta_order: int | None = None,
+               seed: int = 0, mufu_ulp_error: float = 0.0, mma_k_chunk: int | None = None,
+               cta_order: int | None = None,
                garbage_seed: int | None = None, work_budget: int = DEFAULT_WORK_BUDGET) -> dict[str, np.ndarray]:
     """Run `kernel` and return every GMEM param by name.
 
@@ -107,12 +109,13 @@ def run_kernel(kernel: Kernel, inputs: dict[str, np.ndarray], dims: dict[str, in
             gmem[p["name"]] = arr.copy()
         else:
             gmem[p["name"]] = garbage(_concrete(v.shape, dims), v.dtype, rng)
-    _launch(kernel, gmem, dims, seed, gseed, 0, mufu_ulp_error, cta_order, _Budget(work_budget))
+    _launch(kernel, gmem, dims, seed, gseed, 0, (mufu_ulp_error, mma_k_chunk), cta_order, _Budget(work_budget))
     return gmem
 
 
 def run_program(program: Program, inputs: dict[str, np.ndarray], dims: dict[str, int] | None = None, *,
-                seed: int = 0, mufu_ulp_error: float = 0.0, cta_order: int | None = None,
+                seed: int = 0, mufu_ulp_error: float = 0.0, mma_k_chunk: int | None = None,
+                cta_order: int | None = None,
                 garbage_seed: int | None = None, work_budget: int = DEFAULT_WORK_BUDGET) -> dict[str, np.ndarray]:
     """Run each launch in order; returns the program's params (not its temporaries)."""
     # shortcut: kernels and program share one dims namespace, split it if names start to clash.
@@ -137,12 +140,12 @@ def run_program(program: Program, inputs: dict[str, np.ndarray], dims: dict[str,
             want = _concrete(k.values[p["value"]].shape, dims)
             if bound[p["name"]].shape != want:
                 raise InterpError(f"launch {i} ({k.name}): {p['name']} shape {bound[p['name']].shape} != {want}")
-        _launch(k, bound, dims, seed, gseed, i + 1, mufu_ulp_error, cta_order, budget)  # writes land in bufs
+        _launch(k, bound, dims, seed, gseed, i + 1, (mufu_ulp_error, mma_k_chunk), cta_order, budget)
     return {p["name"]: bufs[p["name"]] for p in program.params}
 
 
 def _launch(k: Kernel, gmem: dict[str, np.ndarray], dims: dict[str, int], seed: int, gseed: int, launch: int,
-            mufu_ulp_error: float, cta_order: int | None, budget: _Budget) -> None:
+            numerics: tuple[float, int | None], cta_order: int | None, budget: _Budget) -> None:
     grid = _concrete(k.grid, dims)
     pids = list(itertools.product(*(range(g) for g in grid)))
     if len(pids) > MAX_CTAS:
@@ -158,7 +161,7 @@ def _launch(k: Kernel, gmem: dict[str, np.ndarray], dims: dict[str, int], seed: 
         # rng keyed by the CTA's grid position, not run order, so shuffling changes nothing for honest kernels
         rngs = (np.random.default_rng([gseed, launch + 1, cta_index]),
                 np.random.default_rng([seed, launch + 1, cta_index, 1]))
-        cta = _CTA(k, env, dims, pids[cta_index], grid, rngs, mufu_ulp_error, budget, owners, cta_index)
+        cta = _CTA(k, env, dims, pids[cta_index], grid, rngs, numerics, budget, owners, cta_index)
         with np.errstate(all="ignore"):  # overflow, NaN and divide-by-zero follow IEEE / wraparound rules
             cta.block(k.body)
 
@@ -166,15 +169,18 @@ def _launch(k: Kernel, gmem: dict[str, np.ndarray], dims: dict[str, int], seed: 
 class _CTA:
     def __init__(self, k: Kernel, env: dict[int, np.ndarray], dims: dict[str, int], pid: tuple[int, ...],
                  grid: tuple[int, ...], rngs: tuple[np.random.Generator, np.random.Generator],
-                 mufu_ulp_error: float, budget: _Budget, owners: dict[int, np.ndarray], cta_id: int):
+                 numerics: tuple[float, int | None], budget: _Budget, owners: dict[int, np.ndarray],
+                 cta_id: int):
         self.k, self.env, self.dims, self.pid, self.grid = k, env, dims, pid, grid
-        (self.garbage_rng, self.mufu_rng), self.mufu_ulp_error, self.budget = rngs, mufu_ulp_error, budget
+        (self.garbage_rng, self.mufu_rng), self.budget = rngs, budget
+        self.mufu_ulp_error, self.mma_k_chunk = numerics
         self.owners, self.cta_id = owners, cta_id
-        # Shared-memory hazards since the last barrier (threads are vector lanes, so we track, not race).
-        self.written: set[int] = set()
-        self.read: set[int] = set()
-        self.pending: dict[int, int] = {}  # async_copy destinations -> group, until wait(group)
-        self.op_reads: set[int] = set()
+        # Shared-memory hazards since the last barrier, as per-element masks (threads are vector
+        # lanes here, so races never happen by themselves; we detect them instead).
+        self.written: dict[int, np.ndarray] = {}
+        self.read: dict[int, np.ndarray] = {}
+        self.pending: dict[int, dict[int, np.ndarray]] = {}  # async_copy dst -> {group: mask} until wait
+        self.op_reads: dict[int, np.ndarray] = {}
 
     # ------------------------------------------------------------ helpers
 
@@ -187,12 +193,7 @@ class _CTA:
     def get(self, x: Any, dtype: np.dtype | None = None) -> np.ndarray:
         if isinstance(x, str):
             vid = int(x[1:])
-            if self.shared(vid):
-                if vid in self.pending:
-                    raise InterpError(f"race: %{vid} read before wait() on its async_copy")
-                if vid in self.written:
-                    raise InterpError(f"race: %{vid} ({self.k.values[vid].space}) read after write with no barrier()")
-                self.op_reads.add(vid)
+            self.touch(vid, (), write=False)
             return self.env[vid]
         return np.asarray(x, dtype=dtype)  # literal: takes the dtype of the result
 
@@ -231,26 +232,35 @@ class _CTA:
     def block(self, b: Block) -> None:
         for op in b.ops:
             self.budget.charge(OP_OVERHEAD)
-            self.op_reads = set()
+            self.op_reads = {}
             getattr(self, "op_" + op.kind, self.op_elementwise)(op)
-            if op.kind in _WRITES or (op.kind == "alloc" and "init" in op.attrs):
-                self.wrote(op)
-            self.read |= self.op_reads
+            if op.kind in _WRITES_WHOLE or (op.kind == "alloc" and "init" in op.attrs):
+                self.touch(op.outputs[0], (), write=True)
+            for vid, m in self.op_reads.items():
+                self.read[vid] = self.read[vid] | m if vid in self.read else m
             for vid in op.outputs:
                 self.budget.charge(self.env[vid].size)
 
-    def wrote(self, op: Op) -> None:
-        vid = op.outputs[0]
+    def touch(self, vid: int, idx: tuple[Any, ...], write: bool, group: int | None = None) -> None:
+        """Check a read or write of region `idx` of a shared tile against hazards since the last barrier."""
         if not self.shared(vid):
             return
-        if vid in self.pending:
-            raise InterpError(f"race: %{vid} written while an async_copy into it is in flight")
-        if vid in self.read:
-            raise InterpError(f"race: %{vid} ({self.k.values[vid].space}) written after a read with no barrier()")
-        if op.kind == "async_copy":
-            self.pending[vid] = op.attrs["group"]
+        r = np.zeros(self.env[vid].shape, dtype=bool)
+        r[idx] = True
+        space = self.k.values[vid].space
+        if any((m & r).any() for m in self.pending.get(vid, {}).values()):
+            raise InterpError(f"race: %{vid} used while an async_copy into it is in flight (missing wait())")
+        if not write:
+            if vid in self.written and (self.written[vid] & r).any():
+                raise InterpError(f"race: %{vid} ({space}) read after write with no barrier()")
+            self.op_reads[vid] = self.op_reads[vid] | r if vid in self.op_reads else r
+        elif vid in self.read and (self.read[vid] & r).any():
+            raise InterpError(f"race: %{vid} ({space}) written after a read with no barrier()")
+        elif group is not None:
+            groups = self.pending.setdefault(vid, {})
+            groups[group] = groups[group] | r if group in groups else r
         else:
-            self.written.add(vid)
+            self.written[vid] = self.written[vid] | r if vid in self.written else r
 
     def own(self, vid: int, idx: tuple[Any, ...], write: bool) -> None:
         """GMEM: a CTA may not read or overwrite elements another CTA wrote in this launch."""
@@ -276,23 +286,27 @@ class _CTA:
             self.set(vid, garbage(shape, v.dtype, self.garbage_rng))
 
     def _move(self, op: Op) -> None:
-        src, dst = self.get(op.inputs[0]), self.env[op.outputs[0]]
+        s_vid, d_vid = int(op.inputs[0][1:]), op.outputs[0]
+        src, dst = self.env[s_vid], self.env[d_vid]
         s_idx, d_idx = self.index(src, op.attrs.get("src_index")), self.index(dst, op.attrs.get("dst_index"))
         data = src[s_idx]
         if np.shape(data) != np.shape(dst[d_idx]):
             raise InterpError(f"{op.kind}: moving shape {np.shape(data)} into {np.shape(dst[d_idx])}")
-        self.own(int(op.inputs[0][1:]), s_idx, write=False)
-        self.own(op.outputs[0], d_idx, write=True)
+        self.touch(s_vid, s_idx, write=False)  # region-level: disjoint parts of one tile never conflict
+        self.touch(d_vid, d_idx, write=True, group=op.attrs["group"] if op.kind == "async_copy" else None)
+        self.own(s_vid, s_idx, write=False)
+        self.own(d_vid, d_idx, write=True)
         dst[d_idx] = data  # in place: GMEM writes are visible to later CTAs
 
     op_load = op_store = op_async_copy = _move
 
     def op_wait(self, op: Op) -> None:
         # Copies already happened; wait() makes them visible, still only after a barrier for other threads.
-        done = [v for v, g in self.pending.items() if g == op.attrs["group"]]
-        for v in done:
-            del self.pending[v]
-            self.written.add(v)
+        for vid, groups in self.pending.items():
+            m = groups.pop(op.attrs["group"], None)
+            if m is not None:
+                self.written[vid] = self.written[vid] | m if vid in self.written else m
+        self.pending = {v: g for v, g in self.pending.items() if g}
 
     def op_barrier(self, op: Op) -> None:
         self.written.clear()
@@ -302,7 +316,12 @@ class _CTA:
         a, b, acc = (self.get(x) for x in op.inputs)
         b = b.T if op.attrs.get("transpose_b") else b
         self.budget.charge(a.shape[0] * a.shape[1] * b.shape[1])
-        acc[...] = (acc.astype(np.float64) + a.astype(np.float64) @ b.astype(np.float64)).astype(acc.dtype)
+        a, b = a.astype(np.float64), b.astype(np.float64)
+        step = self.mma_k_chunk or a.shape[1]
+        out = acc.astype(np.float64)
+        for k0 in range(0, a.shape[1], step):  # round into the accumulator dtype after each k-chunk
+            out = (out + a[:, k0:k0 + step] @ b[k0:k0 + step, :]).astype(acc.dtype).astype(np.float64)
+        acc[...] = out
 
     def op_mufu(self, op: Op) -> None:
         vid = op.outputs[0]
@@ -395,7 +414,7 @@ def _shift(a: np.ndarray, b: np.ndarray, left: bool) -> np.ndarray:
     return out.astype(f"u{a.dtype.itemsize}").view(a.dtype)  # wrap into the narrow signed type
 
 
-_WRITES = ("load", "store", "async_copy", "mma", "gather_load")
+_WRITES_WHOLE = ("mma", "gather_load")  # load/store/async_copy track their exact region in _move
 
 _ELEMENTWISE = {
     "add": np.add, "sub": np.subtract, "mul": np.multiply, "fma": _fma,

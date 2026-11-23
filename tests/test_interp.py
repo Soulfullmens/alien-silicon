@@ -47,7 +47,7 @@ def baseline(task):
 def test_baselines_correct_at_tau(tid, dist):
     task = TASKS[tid]
     inputs = task.make_inputs(dist, seed=0)
-    out = run_kernel(baseline(task), inputs, task.dims, seed=1)
+    out = run_kernel(baseline(task), inputs, task.dims(), seed=1)
     ref = task.expected(inputs)
     for name in task.outputs:
         assert check(out[name], ref[name]), f"{tid}/{dist}: max err {np.max(np.abs(out[name] - ref[name]))}"
@@ -58,8 +58,8 @@ def test_deterministic_bit_identical(tid):
     task = TASKS[tid]
     inputs = task.make_inputs("D1", seed=3)
     k = baseline(task)
-    a = run_kernel(k, inputs, task.dims, seed=7, mufu_ulp_error=2.0)
-    b = run_kernel(k, inputs, task.dims, seed=7, mufu_ulp_error=2.0)
+    a = run_kernel(k, inputs, task.dims(), seed=7, mufu_ulp_error=2.0)
+    b = run_kernel(k, inputs, task.dims(), seed=7, mufu_ulp_error=2.0)
     for name in task.outputs:
         assert a[name].tobytes() == b[name].tobytes()
 
@@ -69,14 +69,14 @@ def test_attention_256_under_2s():
     inputs = task.make_inputs("D1", seed=0)
     k = baseline(task)
     t = time.perf_counter()
-    run_kernel(k, inputs, task.dims)
+    run_kernel(k, inputs, task.dims())
     assert time.perf_counter() - t < 2.0
 
 
 def test_reference_catches_a_wrong_kernel():
     task = TASKS["w2"]
     inputs = task.make_inputs("D1", seed=0)
-    out = run_kernel(baseline(task), inputs, task.dims)["Y"]
+    out = run_kernel(baseline(task), inputs, task.dims())["Y"]
     ref = task.expected(inputs)["Y"]
     assert check(out, ref)
     assert not check(out * np.float16(1.01), ref)

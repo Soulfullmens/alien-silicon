@@ -59,9 +59,15 @@ The spec is §8 and I-5 of `master_plan.md`. This page records what the code in 
 
 ## Judge entry points
 
-- `judge.static_check.build_submission(source)`: agent DSL source → IR, after the AST allow-list. Kernel params must be annotated literally as `GMEM[dtype, (dims…)]`.
+- `judge.evaluate(source, task, mufu_ulp_error=, mma_k_chunk=)`: the full pipeline. Returns a record with `correct`, `stage`, `bounds`, `tests` and `provenance`.
+- `judge.sandbox.build_in_sandbox(source)`: builds agent DSL source in an isolated child, never in-process.
+- `judge.static_check.build_submission(source)`: the AST allow-list plus the build. It runs inside the sandbox child. Kernel params must be annotated literally as `GMEM[dtype, (dims…)]`.
 - `judge.ir_check.load_kernel(json)` / `load_program(json)`: the only way IR JSON gets in. It is replayed through the DSL and must match byte for byte.
-- `judge.correctness.run_tests(task, kernel)`: D1–D4 and S1–S4. Each runs twice, with different garbage and a shuffled CTA order. Results must be bit-identical, inputs untouched, and outputs within τ.
+- `judge.bounds.prove_bounds(kernel, task)`: a Z3 proof that every access is in bounds, with matching extents, for every valid shape.
+- `judge.correctness.run_tests(task, kernel)`: D1–D4 and S1–S4 on every task shape. Each runs twice, with different garbage and a shuffled CTA order. Results must be bit-identical, inputs untouched, output shapes right, and outputs within τ.
+- `python -m judge.mutate`: the judge mutation score over all baselines.
+
+Kernel param names must match the task's input/output names. The bounds proof links each kernel dim to the task's dim by name and position.
 
 ## Not checked yet (later weeks)
 

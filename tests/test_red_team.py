@@ -204,7 +204,7 @@ def k(X: GMEM[f32, (8,)], Y: GMEM[f32, (8,)]):
 '''
     src = "from aliensilicon.ir import GMEM, RMEM, SMEM, alloc, async_copy, barrier, f32, kernel, load, store, wait\n"
     x = {"X": np.arange(8, dtype=np.float32)}
-    for sync, err in [("barrier()", "before wait"), ("wait(0)", "no barrier"), ("wait(0)\n    barrier()", None)]:
+    for sync, err in [("barrier()", "missing wait"), ("wait(0)", "no barrier"), ("wait(0)\n    barrier()", None)]:
         k = next(iter(build_submission(src + body.format(sync=sync)).values()))
         if err:
             with pytest.raises(InterpError, match=err):

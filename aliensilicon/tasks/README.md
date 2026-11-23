@@ -2,7 +2,7 @@
 
 **Track:** Shared core · **Started:** Week 2
 
-Workloads from §13. Each task in `TASKS` (`__init__.py`) has a spec, input shapes, a NumPy float64 reference, D1–D4 input generators, and a naive baseline in `baselines/`. Baselines are written in the DSL and must pass the judge's allow-list as they are.
+Workloads from §13. Each task in `TASKS` (`__init__.py`) has a spec, symbolic input and output shapes, 3 concrete shapes (all must pass), shape constraints for the Z3 bounds proof, a NumPy float64 reference, D1–D4 and S1–S4 input generators, and a naive baseline in `baselines/`. Baselines are written in the DSL and must pass the judge's allow-list as they are.
 
 | ID | Status |
 |---|---|

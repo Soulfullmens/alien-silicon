@@ -23,20 +23,26 @@
 
 Attacks that failed (the code held): import tricks, `__class__` attribute chains, builtins (`open`, `eval`), lambdas and comprehensions, `global`, `while`, `try`, nested functions, rebinding DSL names, `**kwargs`, f-strings, bytes, default args, top-level code (`tests/test_static_check.py`, 25 cases).
 
-## 2. Still weak: known and not fixed yet
+## 2. Weak points, and their status after round 2
 
-Ranked by how much each threatens the paper's claims.
+| # | Weak point | Status |
+|---|---|---|
+| 1 | Agent code built in the judge's own process | **Fixed.** `judge/sandbox.py` builds in a child process with its own network namespace and an unprivileged uid (nobody). File writes, forking, CPU (10 s), memory (2 GB), wall time and output size are all capped, and the environment is empty. Only IR JSON comes back, and `ir_check` re-validates it, so the parent never runs agent code. Tested: network, data writes, fork, CPU and memory are all contained (`tests/test_hardening.py`). Production adds `runner/sandbox/Dockerfile` (read-only fs, `--network none`, `--cap-drop ALL`). **Remaining:** the child can read files and create empty files, which Docker's `--read-only` closes. |
+| 2 | Simulator more accurate than hardware | **Mechanism built.** `mma_k_chunk=c` rounds the accumulator after every c-wide slice of K, like a tensor core. The judge takes it as a parameter, and the Week 3 chip profile will set it (T4: k = 8). **Finding:** with τ = 1e-3, f16 accumulation still passes for K ≤ 128, so on these sizes it is a legitimate speed trick and not a hack. |
+| 3 | Tolerance accepts dropping small softmax values | **Still your decision** (see the decision log). Nothing changed. |
+| 4 | One shape per task | **Fixed.** Each task has 3 shapes (for example GEMM 128³, 64×192×96, 192×64×32; softmax cols 256/200/1000; attention seq 256/128/48), and every test runs on every shape (24 runs per kernel). A kernel with a hard-coded shape fails. GEMM and attention shapes stay multiples of their tile sizes until the IR gets a masked load. |
+| 5 | Bounds checked only for the tested inputs | **Fixed.** `judge/bounds.py` uses Z3 to prove that every index and slice is in bounds and that source and destination extents match, for **every** shape that satisfies the task's constraints. All baselines are proven. A hard-coded loop count or an off-by-one slice gets a concrete counterexample shape. Indices that depend on data come back "unproven", and the runtime checks cover those. |
+| 6 | Race tracking per whole tile | **Fixed.** Hazards are tracked per element, so disjoint regions of one tile never conflict. |
+| 7 | Bit-identical only on one machine | **Partly fixed.** Every result records a judge hash (over judge, IR, interpreter and task code), plus the NumPy and Python versions and the sandbox capabilities. **Remaining:** pin versions in a lockfile before the main runs. |
+| 8 | NumPy reduction order | Not done. Needs the chip's tree order, which comes with the chip profile. |
+| 9 | No white-box adversary | Not done. Needs the agent/LLM layer in Phase 2. |
+| 10 | Slow interpreter | Not done. Each kernel takes 0.1–0.3 s per full judge run today, which is fine for Phase 1. |
 
-1. **The judge still runs agent code in-process.** The allow-list is the only barrier, and A1 shows a single gap is enough. *Change:* build the DSL inside the no-network, read-only Docker sandbox (§22), and send only IR JSON to `judge/ir_check.py`, which never runs agent code. **Do this before the first agent run.**
-2. **The simulator is more accurate than real hardware.** `mma` and `fma` compute in float64 and round once, but real tensor cores round, and sometimes truncate, at each k-step. A kernel that relies on that extra accuracy (long-K accumulation in f16) passes here and fails on a T4. *Change:* make MMA accumulation precision and rounding mode part of the chip profile (Week 3), then measure them on the T4 (Week 9).
-3. **The tolerance accepts dropping small values.** On a peaked softmax, zeroing every probability below 1e-4 (92% of entries) still passes, because the bound scales with max\|ref\|. That's real block sparsity, an approximation, not plain correctness. **This is your decision before freezing the pre-registration.** Is it a legitimate trick (count it as a discovery) or a hack (add a per-row or relative-L2 criterion)?
-4. **Each task tests only one shape.** A kernel can hard-code 128×128 and pass. §14.1 S5 asks for non-multiple shapes. *Change:* each task gets 2–3 shapes, including one that isn't a multiple of 16/64, and all of them must pass.
-5. **Bounds are checked only for the inputs we test.** Out-of-bounds access is caught at run time for the tested shapes. Proving it for all shapes is the Z3 step in §14.1. *Change:* make index expressions affine (they already are, through `iadd`/`imul`) and prove bounds symbolically.
-6. **Race tracking is conservative and per tile.** It works on whole tiles, so two disjoint halves of one SMEM tile written by different threads count as a conflict, and a real race between different elements of one RMEM tile isn't tracked at all. That's fine for the baselines, but it could produce false alarms on clever kernels. *Change:* track by region (slice ranges) once a real kernel needs it.
-7. **Results are bit-identical on one machine, not necessarily across machines.** `np.exp2`/`np.sin` use libm/SIMD code paths that differ by platform and NumPy version. *Change:* pin NumPy in a lockfile and record `numpy.__version__`, plus a hash of the interpreter and judge, in every result (§14.3 asks for the judge hash).
-8. **Reduction order is NumPy's pairwise order**, not the chip's tree order. That matters for f16 sums. *Change:* model the tree order per scope (warp shuffle, CTA tree).
-9. **No white-box adversary (WB) yet.** The fixed D and S tests can still be learned by a kernel that branches on its input. The WB adversary in §14.1 is the real defence, together with fresh seeds at audit time.
-10. **The interpreter is slow**, about 10 µs per op in Python. It's fine for the baselines, but agent search will run thousands of kernels. *Change:* vectorize per grid (one NumPy op over all CTAs at once), or JIT the hot ops with Numba.
+## 2b. Round 2 additions
+
+- **Judge mutation score** (`python -m judge.mutate`): each baseline is broken in small ways (delete a statement, bump an index constant, scale a float, swap mufu/reduce/cmp ops, swap `sub` operands, drop `init=`/`transpose_b=`/`keepdims=`), and we count how many mutants the judge catches. **Full judge: 70/70 killed (100%).** The Week 2 judge (D1 only, one shape) misses 4 of them: the missing max-subtraction, max→min swapped (twice), and a 1% scale change in attention. So the score really does tell a strong judge from a weak one.
+- **One pipeline:** `judge.evaluate(source, task)` runs sandbox build → IR replay → Z3 bounds → 24 hidden tests, and returns a result record with provenance.
+- **Output shape check:** a kernel that declares the wrong output shape used to compare via NumPy broadcasting. Now it fails.
 
 ## 3. What would make it more powerful
 

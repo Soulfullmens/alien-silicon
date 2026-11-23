@@ -18,6 +18,7 @@ The full plan is in [`docs/master_plan.md`](docs/master_plan.md) (v2.3).
 | W1 GEMM, W2 softmax, W3 attention: spec, float64 reference, naive baseline, correct at τ on D1–D4 and S1–S4 | `aliensilicon/tasks/` |
 | Judge: IR JSON replay check, hidden tests, race and input-mutation detection | `judge/` |
 | Red-team round 1: 13 working attacks found and fixed, each with a regression test | `docs/red_team.md` |
+| Hardening round 2: sandboxed builds, Z3 bounds proofs, 3 shapes per task, tensor-core rounding, judge mutation score 70/70 | `judge/`, `docs/red_team.md` §2 |
 
 ## Which folder belongs to which track
 
@@ -43,9 +44,20 @@ Build a kernel the way the judge will see it:
 
 ```python
 from pathlib import Path
+
 from judge.static_check import build_submission
 
 k = build_submission(Path("aliensilicon/tasks/baselines/softmax_naive.py").read_text())["softmax_naive"]
 print(k.sha256())
 print(k.to_json())
+```
+
+Judge a submission end to end (sandbox → IR check → Z3 bounds → 24 hidden tests):
+
+```python
+from judge import evaluate
+from aliensilicon.tasks import TASKS
+
+record = evaluate(TASKS["w2"].baseline_source(), TASKS["w2"])
+print(record["correct"], record["bounds"]["status"], record["provenance"]["judge_sha256"])
 ```

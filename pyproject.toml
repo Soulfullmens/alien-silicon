@@ -8,7 +8,7 @@ version = "0.0.1"
 description = "Tile IR, interpreter, cost model and judge for AI kernels on unseen chips"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = ["numpy>=1.26", "jsonschema>=4.20"]
+dependencies = ["numpy>=1.26", "jsonschema>=4.20", "z3-solver>=4.12"]
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "hypothesis>=6", "ruff>=0.5"]
